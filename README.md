@@ -83,14 +83,12 @@ let vc = QLComposableHostingController {
 
 ### 3. Scroll Views
 
-`QLScrollView` automatically manages content size and layout for you.
+`ScrollView` automatically manages content size and layout for you.
 
 ```swift
 let scrollView = QLScrollView()
-scrollView.axis = .vertical
-
 // Add content declaratively
-scrollView.children = [
+ScrollView(scrollView) [
     headerView,
     contentLabel,
     footerView
