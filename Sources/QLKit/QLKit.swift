@@ -23,3 +23,7 @@ extension UIView {
         )
     }
 }
+
+public func ForEach<T>(_ list: [T], map: (T) -> Element) -> FastExpression where  T: UIView {
+  BlockExpression(expressions: list.map { ValueExpression<Element>(value: map($0)) })
+}

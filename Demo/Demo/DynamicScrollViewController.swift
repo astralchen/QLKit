@@ -12,29 +12,40 @@ import QLKit
 class DynamicScrollViewController: QLHostingController {
 
 
-    let addButton = UIButton(type: .system)
+    lazy var addButton:  UIButton =  {
+        var config = UIButton.Configuration.filled()
+        config.title = "Add Item"
+        config.cornerStyle = .capsule
+        config.buttonSize = .medium
+        
+        let addButton = UIButton(configuration: config)
+        addButton.addTarget(self, action: #selector(addItemTapped), for: .touchUpInside)
+        addButton.backgroundColor = .red
+        return addButton
+    }()
 
     private var items: [UIView] = []
 
     let scrollView: QLScrollView = QLScrollView()
 
-
-
     override var body: Layout {
-        VStack(spacing: 12) {
-            addButton
-
-            ScrollView(scrollView) {
-                VStack(spacing: 12) {
-                    ForEach(items) { item in
-                        item
-                            .frame(height: 80)
-                    }
+        ScrollView(scrollView) {
+            VStack(spacing: 12) {
+                ForEach(items) { item in
+                    item
+                        .frame(height: 80)
                 }
-                .padding(.all, 16)
             }
+            .padding(.horizontal, 16)
+            .padding(.horizontal, view.safeAreaEdgeInsets.leading)
         }
-        .padding(.top, view.safeAreaInsets.top)
+        .overlay(alignment: .topTrailing) {
+            addButton
+                .padding(.trailing, 16)
+                .padding(.vertical, 8)
+                .padding(.trailing, view.safeAreaEdgeInsets.trailing)
+                .padding(.top, view.safeAreaEdgeInsets.top)
+        }
 
     }
 
@@ -44,13 +55,6 @@ class DynamicScrollViewController: QLHostingController {
 
         // 初始化项目
         addItems(count: 10)
-
-        // 添加按钮用于动态添加内容
-
-        addButton.setTitle("Add Item", for: .normal)
-        addButton.addTarget(self, action: #selector(addItemTapped), for: .touchUpInside)
-        addButton.frame = CGRect(x: 16, y: 50, width: 100, height: 44)
-        view.addSubview(addButton)
     }
 
 
@@ -80,5 +84,5 @@ class DynamicScrollViewController: QLHostingController {
 
 
 #Preview {
-   UINavigationController(rootViewController: DynamicScrollViewController())
+    DynamicScrollViewController()
 }

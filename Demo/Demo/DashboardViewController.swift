@@ -78,6 +78,7 @@ class DashboardViewController: QLHostingController {
             Spacer()
         }
         .padding(.all, 16)
+        .padding(.horizontal, view.safeAreaEdgeInsets.leading)
         .padding(.top, view.safeAreaInsets.top)
     }
 

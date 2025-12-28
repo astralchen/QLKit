@@ -25,15 +25,14 @@ class ViewController: QLHostingController {
     override var body: Layout {
         ScrollView(scrollView) {
             VStack(spacing: 12) {
-                ForEach(buttons as [UIView]) { view in
-                    view
+                ForEach(buttons) { button in
+                    button
                         .resizable()
                         .frame(height: 44)
-                    
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.horizontal, view.safeAreaInsets.left)
+            .padding(.horizontal, view.safeAreaEdgeInsets.leading)
         }
     }
     
@@ -49,9 +48,6 @@ class ViewController: QLHostingController {
             config.baseBackgroundColor = .systemBlue.withAlphaComponent(0.1)
             config.baseForegroundColor = .systemBlue
             config.cornerStyle = .medium
-            config.contentInsets = NSDirectionalEdgeInsets(
-                top: 8, leading: 12, bottom: 8, trailing: 12
-            )
             
             let button = UIButton(configuration: config)
             button.tag = index
