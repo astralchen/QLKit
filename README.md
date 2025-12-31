@@ -23,7 +23,7 @@ Add `QLKit` to your `Package.swift` dependencies:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/your-username/QLKit.git", branch: "main")
+    .package(url: "https://github.com/astralchen/QLKit.git", branch: "main")
 ]
 ```
 
@@ -86,13 +86,19 @@ let vc = QLComposableHostingController {
 `ScrollView` automatically manages content size and layout for you.
 
 ```swift
-let scrollView = QLScrollView()
-// Add content declaratively
-ScrollView(scrollView) [
-    headerView,
-    contentLabel,
-    footerView
-]
+class MyViewController: QLHostingController {
+
+    let scrollView = QLScrollView()
+    
+    override var body: Layout {
+        // Add content declaratively
+        ScrollView(scrollView) {
+            headerView,
+            contentLabel,
+            footerView
+        }
+    }
+}
 ```
 
 ### 4. Complex Layout Example
