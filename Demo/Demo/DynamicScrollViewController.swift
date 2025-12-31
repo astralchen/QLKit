@@ -60,10 +60,19 @@ class DynamicScrollViewController: QLHostingController {
 
 
     @objc private func addItemTapped() {
-        addItems(count: 1)
-        setNeedsLayoutUpdate()
-        layoutIfNeeded()
-        scrollView.scrollToBottom()
+         addItems(count: 1)
+
+        let newItem = items.last!
+
+        // ① Complete the layout first (without animation)
+        UIView.performWithoutAnimation {
+            setNeedsLayoutUpdate()
+            layoutIfNeeded()
+        }
+
+        newItem.animateAppear(offsetY: 40)
+
+        scrollView.scrollToBottom(animated: true)
     }
 
     private func addItems(count: Int) {
@@ -78,6 +87,23 @@ class DynamicScrollViewController: QLHostingController {
             view.backgroundColor = colors.randomElement()
             view.layer.cornerRadius = 8
             items.append(view)
+        }
+    }
+}
+
+extension UIView {
+    func animateAppear(offsetY: CGFloat = 12, duration: TimeInterval = 0.25) {
+        // ② Set the initial state
+        alpha = 0
+        transform = CGAffineTransform(translationX: 0, y: offsetY)
+
+        UIView.animate(
+            withDuration: duration,
+            delay: 0,
+            options: [.curveEaseOut]
+        ) {
+            self.alpha = 1
+            self.transform = .identity
         }
     }
 }
