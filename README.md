@@ -93,8 +93,8 @@ class MyViewController: QLHostingController {
     override var body: Layout {
         // Add content declaratively
         ScrollView(scrollView) {
-            headerView,
-            contentLabel,
+            headerView
+            contentLabel
             footerView
         }
     }
