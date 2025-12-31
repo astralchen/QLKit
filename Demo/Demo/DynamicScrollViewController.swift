@@ -70,7 +70,7 @@ class DynamicScrollViewController: QLHostingController {
             layoutIfNeeded()
         }
 
-        newItem.animateAppear(offsetY: 40)
+        newItem.animateAppear(offsetY: max(view.safeAreaEdgeInsets.bottom, 12))
 
         scrollView.scrollToBottom(animated: true)
     }
