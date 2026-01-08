@@ -35,8 +35,7 @@ final class MessageCell: UICollectionViewCell {
     override init(frame: CGRect) {
         super.init(frame: frame)
 
-        avatarView.backgroundColor = .systemPink
-        avatarView.tintColor = .white
+        avatarView.backgroundColor = .systemPink.withAlphaComponent(0.2)
         avatarView.contentMode = .scaleAspectFit
         avatarView.layer.cornerRadius = 20
         avatarView.clipsToBounds = true
@@ -54,6 +53,7 @@ final class MessageCell: UICollectionViewCell {
         titleLabel.text = model.title
         messageLabel.text = model.message
         avatarView.image = UIImage(systemName: model.imageName)
+        avatarView.tintColor = model.themeColor
         setNeedsLayout()
     }
 

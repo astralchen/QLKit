@@ -5,10 +5,11 @@
 //  Created by Sondra on 2025/12/17.
 //
 
-import Foundation
+import UIKit
 
 struct MessageModel {
     let title: String
     let message: String
     let imageName: String
+    let themeColor: UIColor
 }
