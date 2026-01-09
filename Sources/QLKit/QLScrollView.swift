@@ -122,7 +122,9 @@ open class QLScrollView: UIScrollView, HasBody {
         )
 
         // Update scrollView's contentSize
-        self.contentSize = contentSize
+        if self.contentSize != contentSize {
+            self.contentSize = contentSize
+        }
     }
 
     // MARK: - Private Helpers
