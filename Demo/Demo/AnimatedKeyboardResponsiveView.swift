@@ -50,10 +50,10 @@ class AnimatedKeyboardResponsiveView: UIView {
         config.contentInsets = .init(top: 14, leading: 24, bottom: 14, trailing: 24)
 
         submitButton.configuration = config
-        submitButton.addTarget(self, action: #selector(keyboardExit), for: .touchUpInside)
+        submitButton.addTarget(self, action: #selector(dismissKeyboard), for: .touchUpInside)
     }
 
-    @objc private func keyboardExit() {
+    @objc private func dismissKeyboard() {
         textField.resignFirstResponder()
     }
 
