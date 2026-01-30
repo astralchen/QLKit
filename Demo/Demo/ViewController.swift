@@ -19,7 +19,8 @@ class ViewController: QLHostingController {
         DashboardViewController.self,
         MesssageViewController.self,
         KeyboardHandlingViewController.self,
-        ScrollViewWithKeyboardViewController.self
+        ScrollViewWithKeyboardViewController.self,
+        SemanticContentDemoViewController.self
     ]
     
     var buttons: [UIButton] = []
