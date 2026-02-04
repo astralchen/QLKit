@@ -212,7 +212,7 @@ class ExampleRow2: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        backgroundColor = .systemBackground
+        backgroundColor = .secondarySystemBackground
         layer.cornerRadius = 8
 
         leadingView.backgroundColor = .systemBlue

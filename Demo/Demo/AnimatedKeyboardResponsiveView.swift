@@ -45,10 +45,6 @@ class AnimatedKeyboardResponsiveView: UIView {
         var config = UIButton.Configuration.filled()
         config.title = "提交"
         config.cornerStyle = .capsule     // ✅ 胶囊
-        config.baseBackgroundColor = .systemBlue
-        config.baseForegroundColor = .white
-        config.contentInsets = .init(top: 14, leading: 24, bottom: 14, trailing: 24)
-
         submitButton.configuration = config
         submitButton.addTarget(self, action: #selector(dismissKeyboard), for: .touchUpInside)
     }
@@ -90,7 +86,13 @@ class AnimatedKeyboardResponsiveView: UIView {
                 .frame(height: 50)
         }
         .padding(.horizontal, 20)
+        .padding(.horizontal, safeAreaInsets.left)
         .padding(.bottom, max(keyboardHeight + 20, safeAreaInsets.bottom))
     }
 }
 
+
+
+#Preview {
+    AnimatedKeyboardResponsiveView()
+}

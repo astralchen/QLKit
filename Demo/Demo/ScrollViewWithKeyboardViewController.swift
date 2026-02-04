@@ -190,8 +190,9 @@ class ScrollViewWithKeyboardViewController: QLHostingController {
                     .frame(height: 50)
             }
             .padding(.horizontal, 20)
+            .padding(.horizontal, view.safeAreaInsets.left)
             .padding(.top, view.safeAreaInsets.top + 20)
-            .padding(.bottom, 20)
+            .padding(.bottom, max(view.safeAreaInsets.bottom, 10))
         }
     }
 

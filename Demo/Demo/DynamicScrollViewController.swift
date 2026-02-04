@@ -38,6 +38,7 @@ class DynamicScrollViewController: QLHostingController {
             }
             .padding(.horizontal, 16)
             .padding(.horizontal, view.safeAreaEdgeInsets.leading)
+            .padding(.bottom, max(view.safeAreaEdgeInsets.bottom, 20))
         }
         .overlay(alignment: .topTrailing) {
             addButton

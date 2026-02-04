@@ -99,7 +99,7 @@ extension MesssageViewController: UICollectionViewDataSource {
         ) as! MessageCell
 
         cell.configure(data[indexPath.item])
-        cell.backgroundColor = .white
+        cell.backgroundColor = .secondarySystemGroupedBackground
         cell.layer.cornerRadius = 8
 
         return cell
