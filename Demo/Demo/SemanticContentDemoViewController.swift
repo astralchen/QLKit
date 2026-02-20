@@ -280,7 +280,7 @@ class ExampleRow3: UIView {
 
 @QuickLayout
 class ExampleRow4: UIView {
-    let button = UIButton(type: .system)
+    let button = RTLAwareButton(type: .system)
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -297,23 +297,23 @@ class ExampleRow4: UIView {
 
     }
 
-    override var semanticContentAttribute: UISemanticContentAttribute {
-        didSet {
-            /*
-            ❓为什么 Apple 要这么设计？
-
-            这是一个历史包袱：
-                •    UIButton 早于 RTL 支持很多年
-                •    image/title 排列是早期“固定逻辑”
-                •    为了兼容老 App：
-                •    ❌ 不敢自动跟随父 view RTL
-                •    ✅ 只能在按钮自身 force
-
-            📌 所以这不是 bug，是“为了不破坏老 UI”。
-             */
-            button.semanticContentAttribute = semanticContentAttribute
-        }
-    }
+//    override var semanticContentAttribute: UISemanticContentAttribute {
+//        didSet {
+//            /*
+//            ❓为什么 Apple 要这么设计？
+//
+//            这是一个历史包袱：
+//                •    UIButton 早于 RTL 支持很多年
+//                •    image/title 排列是早期“固定逻辑”
+//                •    为了兼容老 App：
+//                •    ❌ 不敢自动跟随父 view RTL
+//                •    ✅ 只能在按钮自身 force
+//
+//            📌 所以这不是 bug，是“为了不破坏老 UI”。
+//             */
+//            button.semanticContentAttribute = semanticContentAttribute
+//        }
+//    }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
@@ -323,6 +323,43 @@ class ExampleRow4: UIView {
         button
             .frame(height: 44)
             .padding(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
+    }
+}
+
+//superview.semanticContentAttribute 默认就是 .unspecified，父容器并不是通过自身的 semanticContentAttribute 来表达 RTL 的，而是通过 effectiveUserInterfaceLayoutDirection 来体现最终方向。
+//所以读 superview.semanticContentAttribute 拿到的还是 .unspecified，同步过去没有任何效果。
+
+class RTLAwareButton: UIButton {
+//    effectiveUserInterfaceLayoutDirection 在 didMoveToSuperview 时不一定已经稳定（父容器自身可能还没完成布局），更安全的时机是：
+
+//    override func didMoveToSuperview() {
+//        super.didMoveToSuperview()
+//        syncDirection()
+//    }
+//
+//    private func syncDirection() {
+//        guard let superview else { return }
+//        switch superview.effectiveUserInterfaceLayoutDirection {
+//        case .rightToLeft:
+//            semanticContentAttribute = .forceRightToLeft
+//        case .leftToRight:
+//            semanticContentAttribute = .forceLeftToRight
+//        @unknown default:
+//            break
+//        }
+//        
+//    }
+    
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        // 只在需要时更新，避免死循环
+        let needed: UISemanticContentAttribute =
+            (superview?.effectiveUserInterfaceLayoutDirection == .rightToLeft)
+            ? .forceRightToLeft : .forceLeftToRight
+        
+        if semanticContentAttribute != needed {
+            semanticContentAttribute = needed
+        }
     }
 }
 
