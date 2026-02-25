@@ -88,6 +88,27 @@ final class MessageCell: UICollectionViewCell {
 }
 
 
-#Preview {
-    MesssageViewController()
+#Preview("简短") {
+    previewCell(MessageModel.mockData[0])
+}
+
+
+#Preview("节选") {
+    previewCell(MessageModel.mockData[8])
+}
+
+
+func makeMessageCell(with model: MessageModel) -> MessageCell {
+    let cell = MessageCell()
+    cell.backgroundColor = .systemGroupedBackground
+    cell.layer.cornerRadius = 8
+    cell.configure(model)
+    return cell
+}
+
+private func previewCell(_ model: MessageModel) -> QLComposableHostingController {
+    QLComposableHostingController {
+        makeMessageCell(with: model)
+            .padding(16)
+    }
 }
