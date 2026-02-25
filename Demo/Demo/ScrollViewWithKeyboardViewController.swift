@@ -390,6 +390,5 @@ extension ScrollViewWithKeyboardViewController: UITextViewDelegate {
 // MARK: - Preview
 
 #Preview {
-    let nav = UINavigationController(rootViewController: ScrollViewWithKeyboardViewController())
-    return nav
+    UINavigationController(rootViewController: ScrollViewWithKeyboardViewController())
 }

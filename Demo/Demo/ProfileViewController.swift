@@ -57,6 +57,5 @@ class ProfileViewController: QLHostingController {
 }
 
 #Preview {
-    let nav = UINavigationController(rootViewController: ProfileViewController())
-    return nav
+    UINavigationController(rootViewController: ProfileViewController())
 }

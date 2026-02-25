@@ -1,5 +1,5 @@
 //
-//  ViewController.swift
+//  MainViewController.swift
 //  Demo
 //
 //  Created by Sondra on 2025/12/26.
@@ -9,7 +9,7 @@ import UIKit
 import QuickLayout
 import QLKit
 
-class ViewController: QLHostingController {
+class MainViewController: QLHostingController {
     
     let viewControllerTypes: [UIViewController.Type] = [
         HorizontalScrollViewViewController.self,
@@ -72,5 +72,5 @@ class ViewController: QLHostingController {
 
 
 #Preview {
-    UINavigationController(rootViewController: ViewController())
+    UINavigationController(rootViewController: MainViewController())
 }

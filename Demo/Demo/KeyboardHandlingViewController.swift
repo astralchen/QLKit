@@ -22,5 +22,5 @@ class KeyboardHandlingViewController: QLHostingController {
 
 
 #Preview {
-    KeyboardHandlingViewController()
+    UINavigationController(rootViewController: KeyboardHandlingViewController())
 }

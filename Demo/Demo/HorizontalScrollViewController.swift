@@ -53,5 +53,5 @@ class HorizontalScrollViewViewController: QLHostingController {
 }
 
 #Preview {
-    HorizontalScrollViewViewController()
+    UINavigationController(rootViewController: HorizontalScrollViewViewController())
 }

@@ -24,6 +24,17 @@ extension UIView {
     }
 }
 
+extension QuickLayout.EdgeInsets {
+
+    public var horizontal: CGFloat {
+        max(leading, trailing)
+    }
+
+    public var vertical: CGFloat {
+        max(top, bottom)
+    }
+}
+
 /// Maps a list of `UIView` instances into a QuickLayout `FastExpression`.
 ///
 /// This helper mirrors the common `ForEach` pattern by transforming each item into an `Element`

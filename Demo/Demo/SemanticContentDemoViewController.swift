@@ -414,5 +414,5 @@ class ExampleRow5: UIView {
 }
 
 #Preview {
-    SemanticContentDemoViewController()
+    UINavigationController(rootViewController: SemanticContentDemoViewController())
 }

@@ -28,6 +28,10 @@ class DynamicScrollViewController: QLHostingController {
 
     let scrollView: QLScrollView = QLScrollView()
 
+//    📌 最终工程级规范
+//    ① 顺序固定：上左下右
+//    ② 每个方向内部：设计值在前，安全区在后
+//    ③ 不混逻辑
     override var body: Layout {
         ScrollView(scrollView) {
             VStack(spacing: 12) {
@@ -37,15 +41,18 @@ class DynamicScrollViewController: QLHostingController {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.horizontal, view.safeAreaEdgeInsets.leading)
-            .padding(.bottom, max(view.safeAreaEdgeInsets.bottom, 20))
+            .padding(.horizontal, view.safeAreaEdgeInsets.horizontal)
+            .padding(.bottom, 8)
+            .padding(.bottom, view.safeAreaEdgeInsets.bottom)
+
         }
         .overlay(alignment: .topTrailing) {
             addButton
-                .padding(.trailing, 16)
-                .padding(.vertical, 8)
-                .padding(.trailing, view.safeAreaEdgeInsets.trailing)
+                .padding(.top, 8)
                 .padding(.top, view.safeAreaEdgeInsets.top)
+                .padding(.trailing, 16)
+                .padding(.trailing, view.safeAreaEdgeInsets.trailing)
+
         }
 
     }
@@ -111,5 +118,5 @@ extension UIView {
 
 
 #Preview {
-    DynamicScrollViewController()
+    UINavigationController(rootViewController: DynamicScrollViewController())
 }
