@@ -36,7 +36,7 @@ import QuickLayout
 @MainActor
 private struct ScrollElement: @MainActor Layout, @MainActor LeafElement {
 
-    private let scrollView: QLScrollView
+    private let child: QLScrollView
 
     /// Creates a leaf layout element backed by a configured `QLScrollView`.
     ///
@@ -46,35 +46,34 @@ private struct ScrollElement: @MainActor Layout, @MainActor LeafElement {
         axis: Axis,
         children: [Element],
     ) {
-        self.scrollView = scrollView
         scrollView.axis = axis
         scrollView.children = children
-
+        self.child = scrollView
     }
 
     /// Delegates layout computation to the backing `QLScrollView`.
     func quick_layoutThatFits(_ proposedSize: CGSize) -> LayoutNode {
-        scrollView.quick_layoutThatFits(proposedSize)
+        child.quick_layoutThatFits(proposedSize)
     }
 
     /// Delegates flexibility reporting to the backing `QLScrollView`.
     func quick_flexibility(for axis: Axis) -> Flexibility {
-        scrollView.quick_flexibility(for: axis)
+        child.quick_flexibility(for: axis)
     }
     
     /// Delegates layout priority reporting to the backing `QLScrollView`.
     func quick_layoutPriority() -> CGFloat {
-        scrollView.quick_layoutPriority()
+        child.quick_layoutPriority()
     }
 
     /// Extracts the backing view into the view array used by QuickLayout.
     func quick_extractViewsIntoArray(_ views: inout [UIView]) {
-        views.append(scrollView)
+        child.quick_extractViewsIntoArray(&views)
     }
 
     /// Returns the concrete backing `UIView` for this leaf element.
     func backingView() -> UIView? {
-        scrollView
+        child
     }
 
 }
