@@ -26,10 +26,16 @@ extension UIView {
 
 extension QuickLayout.EdgeInsets {
 
+    /// The effective horizontal inset.
+    /// Returns the larger value between `leading` and `trailing` to represent
+    /// the maximum horizontal padding that should be respected in layout.
     public var horizontal: CGFloat {
         max(leading, trailing)
     }
 
+    /// The effective vertical inset.
+    /// Returns the larger value between `top` and `bottom` to represent
+    /// the maximum vertical padding that should be respected in layout.
     public var vertical: CGFloat {
         max(top, bottom)
     }

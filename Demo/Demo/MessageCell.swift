@@ -37,12 +37,12 @@ final class MessageCell: UICollectionViewCell {
         super.init(frame: frame)
 
         avatarView.backgroundColor = .systemPink.withAlphaComponent(0.2)
-        avatarView.contentMode = .scaleAspectFit
+        avatarView.contentMode = .scaleAspectFill
         avatarView.layer.cornerRadius = 20
         avatarView.clipsToBounds = true
 
-        titleLabel.font = .boldSystemFont(ofSize: 14)
-        messageLabel.font = .systemFont(ofSize: 14)
+        titleLabel.font = .preferredFont(forTextStyle: .headline)
+        messageLabel.font = .preferredFont(forTextStyle: .subheadline)
         messageLabel.numberOfLines = 0
     }
 
@@ -100,14 +100,14 @@ final class MessageCell: UICollectionViewCell {
 
 func makeMessageCell(with model: MessageModel) -> MessageCell {
     let cell = MessageCell()
-    cell.backgroundColor = .systemGroupedBackground
+    cell.backgroundColor = .secondarySystemFill
     cell.layer.cornerRadius = 8
     cell.configure(model)
     return cell
 }
 
 private func previewCell(_ model: MessageModel) -> QLComposableHostingController {
-    QLComposableHostingController {
+    previewHostingController {
         makeMessageCell(with: model)
             .padding(16)
     }

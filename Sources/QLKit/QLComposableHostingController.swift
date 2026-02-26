@@ -8,6 +8,16 @@
 import UIKit
 import QuickLayout
 
+/// Convenience function that creates and returns a `QLComposableHostingController`
+/// using the provided layout builder.
+/// - Parameter builder: A closure that produces a `Layout` using the `@LayoutBuilder` DSL.
+/// - Returns: A new `QLComposableHostingController`, useful for previews or quick, inline layouts.
+/// - Note: Annotated with `@MainActor`; call from the main thread.
+@MainActor public func previewHostingController(@LayoutBuilder builder: @escaping () -> Layout) -> QLComposableHostingController {
+    QLComposableHostingController(builder: builder)
+}
+
+
 // MARK: - Alternative Approach: Composition-based Hosting Controller
 
 /// A composition-based hosting controller that takes a layout in the initializer
@@ -93,3 +103,4 @@ extension QLComposableHostingController {
         return self
     }
 }
+
