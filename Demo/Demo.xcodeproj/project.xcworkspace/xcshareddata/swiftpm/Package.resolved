@@ -7,16 +7,16 @@
       "location" : "https://github.com/facebookincubator/QuickLayout",
       "state" : {
         "branch" : "main",
-        "revision" : "62310c0a7f4ec43f3ea6ff89f3824ef6b23b2bb3"
+        "revision" : "b6039ce36c233d096a9b6d3d597d3f9f3d90d2f3"
       }
     },
     {
       "identity" : "swift-syntax",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/apple/swift-syntax.git",
+      "location" : "https://github.com/swiftlang/swift-syntax.git",
       "state" : {
-        "revision" : "0687f71944021d616d34d922343dcef086855920",
-        "version" : "600.0.1"
+        "revision" : "4799286537280063c85a32f09884cfbca301b1a1",
+        "version" : "602.0.0"
       }
     }
   ],
