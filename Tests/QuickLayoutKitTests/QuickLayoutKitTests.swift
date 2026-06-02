@@ -1,6 +1,14 @@
 import Testing
-@testable import QuickLayoutKit
+import QuickLayout
+@testable import QuickLayoutKitCore
 
-@Test func example() async throws {
-    // Write your test here and use APIs like `#expect(...)` to check expected conditions.
+@Suite
+struct QuickLayoutKitTests {
+
+    @Test func maximumInsetsUseLargestDirectionalValue() {
+        let insets = QuickLayout.EdgeInsets(top: 4, leading: 12, bottom: 18, trailing: 8)
+
+        #expect(insets.maximumHorizontalInset == 12)
+        #expect(insets.maximumVerticalInset == 18)
+    }
 }

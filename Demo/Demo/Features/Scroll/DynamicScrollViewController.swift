@@ -80,7 +80,7 @@ class DynamicScrollViewController: QuickLayoutHostingController {
 
         newItem.animateAppear(offsetY: max(view.quickLayoutSafeAreaInsets.bottom, 12))
 
-        scrollView.scrollToEnd(animated: true)
+        scrollView.scrollTo(.bottom, animated: true)
     }
 
     private func addItems(count: Int) {

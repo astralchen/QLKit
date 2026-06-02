@@ -8,6 +8,38 @@
 import UIKit
 import QuickLayout
 
+/// Edges that a `QuickLayoutScrollView` can scroll to.
+public enum QuickLayoutScrollEdge: Sendable {
+    /// The top edge for vertical content.
+    case top
+
+    /// The bottom edge for vertical content.
+    case bottom
+
+    /// The leading edge for horizontal content.
+    case leading
+
+    /// The trailing edge for horizontal content.
+    case trailing
+}
+
+/// Options used when replacing or appending scroll content.
+public struct QuickLayoutScrollContentUpdateOptions: OptionSet, Sendable {
+    public let rawValue: Int
+
+    /// Creates an options value.
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    /// Preserves the current visible position by applying the measured content
+    /// size delta after the update.
+    public static let preserveVisiblePosition = QuickLayoutScrollContentUpdateOptions(rawValue: 1 << 0)
+
+    /// Lays out the scroll view immediately after content changes.
+    public static let layoutImmediately = QuickLayoutScrollContentUpdateOptions(rawValue: 1 << 1)
+}
+
 /// A scroll view that lays out QuickLayout elements as its content.
 ///
 /// `QuickLayoutScrollView` measures its `contentElements` with QuickLayout and
@@ -28,6 +60,13 @@ open class QuickLayoutScrollView: UIScrollView, HasBody {
 
     /// The elements laid out inside the scroll view.
     open var contentElements: [Element] = [] {
+        didSet {
+            setNeedsLayout()
+        }
+    }
+
+    /// The alignment used when applying the measured content frame.
+    open var contentAlignment: Alignment = .topLeading {
         didSet {
             setNeedsLayout()
         }
@@ -93,9 +132,6 @@ open class QuickLayoutScrollView: UIScrollView, HasBody {
     override open func layoutSubviews() {
         super.layoutSubviews()
 
-        // Get the alignment based on scroll axis
-        let alignment = contentAlignment
-
         // Calculate the proposed size for content
         let proposedSize = calculateProposedSize()
 
@@ -108,7 +144,7 @@ open class QuickLayoutScrollView: UIScrollView, HasBody {
         // Apply layout with proper alignment
         body.applyFrame(
             CGRect(origin: .zero, size: contentSize),
-            alignment: alignment
+            alignment: contentAlignment
         )
 
         // Update scrollView's contentSize
@@ -118,15 +154,6 @@ open class QuickLayoutScrollView: UIScrollView, HasBody {
     }
 
     // MARK: - Private Helpers
-
-    private var contentAlignment: Alignment {
-        switch axis {
-        case .vertical:
-            return .topLeading
-        case .horizontal:
-            return .topLeading
-        }
-    }
 
     private func calculateProposedSize() -> CGSize {
         let frameSize = frame.size
@@ -160,6 +187,57 @@ open class QuickLayoutScrollView: UIScrollView, HasBody {
     /// Removes all elements from the scroll view.
     open func removeAllContentElements() {
         self.contentElements.removeAll()
+    }
+
+    /// Replaces the scroll content with content produced by a builder.
+    ///
+    /// - Parameters:
+    ///   - axis: The scroll axis to apply. Pass `nil` to keep the current axis.
+    ///   - options: Options controlling layout and visible-position behavior.
+    ///   - content: A builder closure that returns the new elements.
+    open func updateContent(
+        axis: QuickLayout.Axis? = nil,
+        options: QuickLayoutScrollContentUpdateOptions = [.layoutImmediately],
+        @FastArrayBuilder<Element> content: () -> [Element]
+    ) {
+        let previousContentSize = contentSize
+        let previousContentOffset = contentOffset
+
+        if let axis {
+            self.axis = axis
+        }
+        contentElements = content()
+
+        if options.contains(.layoutImmediately) || options.contains(.preserveVisiblePosition) {
+            setNeedsLayout()
+            layoutIfNeeded()
+        }
+
+        guard options.contains(.preserveVisiblePosition) else { return }
+
+        switch self.axis {
+        case .vertical:
+            let delta = contentSize.height - previousContentSize.height
+            contentOffset = CGPoint(x: previousContentOffset.x, y: previousContentOffset.y + delta)
+        case .horizontal:
+            let delta = contentSize.width - previousContentSize.width
+            contentOffset = CGPoint(x: previousContentOffset.x + delta, y: previousContentOffset.y)
+        }
+    }
+
+    /// Appends builder-produced content to the current elements.
+    ///
+    /// - Parameters:
+    ///   - options: Options controlling layout and visible-position behavior.
+    ///   - content: A builder closure that returns the appended elements.
+    open func appendContent(
+        options: QuickLayoutScrollContentUpdateOptions = [.layoutImmediately],
+        @FastArrayBuilder<Element> content: () -> [Element]
+    ) {
+        let appendedElements = content()
+        updateContent(axis: axis, options: options) {
+            ForEach(contentElements + appendedElements)
+        }
     }
 }
 
@@ -196,7 +274,7 @@ extension QuickLayoutScrollView {
     ///
     /// - Parameter animated: Pass `true` to animate the change.
     public func scrollToBeginning(animated: Bool = true) {
-        setContentOffset(.zero, animated: animated)
+        scrollTo(axis == .vertical ? .top : .leading, animated: animated)
     }
 
     /// Scrolls to the end of the content.
@@ -206,25 +284,38 @@ extension QuickLayoutScrollView {
     ///
     /// - Parameter animated: Pass `true` to animate the change.
     public func scrollToEnd(animated: Bool = true) {
+        scrollTo(axis == .vertical ? .bottom : .trailing, animated: animated)
+    }
+
+    /// Scrolls to the specified edge.
+    ///
+    /// - Parameters:
+    ///   - edge: The edge to scroll to.
+    ///   - animated: Pass `true` to animate the change.
+    public func scrollTo(_ edge: QuickLayoutScrollEdge, animated: Bool = true) {
         // Force layout to ensure contentSize is up to date
         layoutIfNeeded()
 
         // Get the effective contentInset (including safe area)
         let adjustedInset = adjustedContentInset
 
-        let bottomOffset: CGPoint
-        switch axis {
-        case .vertical:
-            // Calculate the offset to scroll to the bottom
-            let offsetY = contentSize.height - bounds.height + adjustedInset.bottom
-            bottomOffset = CGPoint(x: contentOffset.x, y: max(-adjustedInset.top, offsetY))
+        let targetOffset: CGPoint
+        switch edge {
+        case .top:
+            targetOffset = CGPoint(x: contentOffset.x, y: -adjustedInset.top)
 
-        case .horizontal:
-            // Calculate the offset to scroll to the far right
+        case .bottom:
+            let offsetY = contentSize.height - bounds.height + adjustedInset.bottom
+            targetOffset = CGPoint(x: contentOffset.x, y: max(-adjustedInset.top, offsetY))
+
+        case .leading:
+            targetOffset = CGPoint(x: -adjustedInset.left, y: contentOffset.y)
+
+        case .trailing:
             let offsetX = contentSize.width - bounds.width + adjustedInset.right
-            bottomOffset = CGPoint(x: max(-adjustedInset.left, offsetX), y: contentOffset.y)
+            targetOffset = CGPoint(x: max(-adjustedInset.left, offsetX), y: contentOffset.y)
         }
 
-        setContentOffset(bottomOffset, animated: animated)
+        setContentOffset(targetOffset, animated: animated)
     }
 }

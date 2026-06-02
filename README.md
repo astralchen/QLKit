@@ -116,6 +116,37 @@ let viewController = QuickLayoutHostingController {
 
 Call `setNeedsLayoutUpdate()` after mutating state that changes `body`.
 
+### `QuickLayoutView`
+
+`QuickLayoutView` is the reusable `UIView` host used by
+`QuickLayoutHostingController`. Use it when a screen already has a UIKit view
+controller and only one region needs QuickLayout content.
+
+```swift
+let titleLabel = UILabel()
+titleLabel.text = "Inline Content"
+
+let hostedView = QuickLayoutView {
+    VStack(spacing: 8) {
+        titleLabel
+    }
+    .padding(.all, 16)
+}
+
+hostedView.setNeedsLayoutUpdate()
+let measured = hostedView.sizeThatFits(in: CGSize(width: 320, height: .infinity))
+```
+
+You can also subclass `QuickLayoutView` and override `body` for reusable UIKit
+components.
+
+### Layout updating
+
+`QuickLayoutHostingController`, `QuickLayoutView`, and the list integration
+views conform to `QuickLayoutLayoutUpdating`. Use
+`setNeedsLayoutUpdate()` after state changes and `performLayoutUpdate(...)` when
+the layout should animate with UIKit.
+
 ### `QuickLayoutScrollView`
 
 `QuickLayoutScrollView` is a `UIScrollView` that measures QuickLayout content
@@ -154,39 +185,88 @@ let scrollView = QuickLayoutScrollView.vertical {
 For horizontal content, pass `axis: .horizontal` to `ScrollView` or use
 `QuickLayoutScrollView.horizontal`.
 
-### Safe-area helpers
+For direct scroll content management, update or append builder content and ask
+the scroll view to preserve the visible position:
+
+```swift
+scrollView.updateContent(
+    axis: .vertical,
+    options: [.layoutImmediately, .preserveVisiblePosition]
+) {
+    headerView
+    ForEach(rows)
+}
+
+scrollView.appendContent {
+    newRowView
+}
+
+scrollView.scrollTo(.bottom, animated: true)
+```
+
+`scrollToBeginning(animated:)` and `scrollToEnd(animated:)` remain available as
+convenience methods.
+
+### Keyboard helpers
+
+Use `QuickLayoutKeyboardObserver` when you only need parsed keyboard context,
+including the frame, animation duration, and animation options. Use
+`QuickLayoutKeyboardAvoider` when a form lives inside a scroll view and the
+active input should remain visible.
+
+```swift
+final class FormViewController: QuickLayoutHostingController {
+
+    private let scrollView = QuickLayoutScrollView()
+    private let keyboardObserver = QuickLayoutKeyboardObserver()
+    private lazy var keyboardAvoider = QuickLayoutKeyboardAvoider(
+        scrollView: scrollView,
+        observer: keyboardObserver
+    )
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        _ = keyboardAvoider
+    }
+}
+```
+
+If the app changes the scroll view's base insets after creating the avoider,
+call `captureCurrentInsetsAsBase()` before the next keyboard transition.
+
+### Layout environment helpers
 
 `UIView.quickLayoutSafeAreaInsets` converts UIKit safe-area insets to
 `QuickLayout.EdgeInsets` and respects the view's effective layout direction.
-The core module also exposes convenience values for symmetric safe-area
-padding:
+UIKit integration also exposes direction-aware layout margins, readable content
+insets, and safe-area-plus-margin composition:
 
 ```swift
 override var body: Layout {
     contentView
-        .padding(.horizontal, view.quickLayoutSafeAreaInsets.maximumHorizontalInset)
-        .padding(.bottom, view.quickLayoutSafeAreaInsets.maximumVerticalInset)
+        .padding(.horizontal, view.quickLayoutContentInsets.maximumHorizontalInset)
+        .padding(.bottom, view.quickLayoutContentInsets.bottom)
 }
 ```
 
-Read safe-area values after the view has been laid out. In a hosting
-controller body, they are commonly used as part of the layout pass.
+Read environment values after the view has been laid out. In a hosting
+controller body, they are commonly used as part of the layout pass. Prefer
+direction-aware helpers over direct `safeAreaInsets.left` or
+`layoutMargins.right` access when the UI can run in RTL.
 
 ### Collection view sizing helpers
 
-`UICollectionViewCell.quickLayoutFlexibility(for:)` and
-`quickLayoutSizeLimit(proposed:)` help self-sizing cells describe which axes are
-fixed by the collection view layout and which axes should be measured by
-QuickLayout.
+Use `QuickLayoutCollectionViewCell`, `QuickLayoutTableViewCell`, and
+`QuickLayoutCollectionReusableView` when your reusable views are fully described
+by QuickLayout.
 
 ```swift
-@QuickLayout
-final class MessageCell: UICollectionViewCell {
+final class MessageCell: QuickLayoutCollectionViewCell {
 
     private let titleLabel = UILabel()
     private let messageLabel = UILabel()
 
-    var body: Layout {
+    override var body: Layout {
         VStack(alignment: .leading, spacing: 4) {
             titleLabel
             messageLabel
@@ -194,20 +274,35 @@ final class MessageCell: UICollectionViewCell {
         .padding(.all, 12)
     }
 
-    override func sizeThatFits(_ size: CGSize) -> CGSize {
-        let proposedSize = quickLayoutSizeLimit(proposed: size)
-        return _QuickLayoutViewImplementation.sizeThatFits(self, size: proposedSize) ?? size
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        quickLayoutHorizontalFlexibility = .fixedSize
+        quickLayoutVerticalFlexibility = .fullyFlexible
     }
 
-    override func quickLayoutFlexibility(for axis: Axis) -> Flexibility {
-        switch axis {
-        case .horizontal:
-            return .fixedSize
-        case .vertical:
-            return .fullyFlexible
-        }
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
     }
 }
+```
+
+For custom cell subclasses that cannot inherit from QuickLayoutKit's base
+classes, keep using `quickLayoutSizeLimit(proposed:)` and
+`quickLayoutFlexibility(for:)` to describe fixed and measured axes.
+
+### Diagnostics
+
+`QuickLayoutDiagnostics` is an opt-in debug helper for layout pass auditing. It
+records the layout host name and measured size when enabled.
+
+```swift
+QuickLayoutDiagnostics.isEnabled = true
+QuickLayoutDiagnostics.reset()
+
+view.setNeedsLayout()
+view.layoutIfNeeded()
+
+let snapshot = QuickLayoutDiagnostics.snapshot()
 ```
 
 ## Demo App
@@ -222,6 +317,8 @@ The `Demo` project contains examples for:
 - Keyboard-aware scrolling
 - Self-sizing collection view cells
 - UIKit semantic content direction behavior
+- Environment inset helpers
+- Debug diagnostics
 
 Open `Demo/Demo.xcodeproj` in Xcode and run the `Demo` scheme to explore the
 examples.
@@ -232,7 +329,8 @@ QuickLayoutKit is a UIKit package, so validate it with an iOS Simulator
 destination from Xcode or `xcodebuild`:
 
 ```sh
-xcodebuild -project Demo/Demo.xcodeproj -scheme Demo -destination 'platform=iOS Simulator,name=iPhone 16' test
+Scripts/verify-demo-build.sh
+xcodebuild -project Demo/Demo.xcodeproj -scheme Demo -destination 'platform=iOS Simulator,name=iPhone 17' test
 ```
 
 Run the demo app from Xcode when validating UIKit layout behavior visually.

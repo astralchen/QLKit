@@ -134,7 +134,11 @@ class NotesFieldView: UIView {
 class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
 
     let scrollView = QuickLayoutScrollView()
-    let keyboardObserver = AnimatedKeyboardObserver()
+    let keyboardObserver = QuickLayoutKeyboardObserver()
+    private lazy var keyboardAvoider = QuickLayoutKeyboardAvoider(
+        scrollView: scrollView,
+        observer: keyboardObserver
+    )
 
     // UI Components
     let headerView = FormHeaderView()
@@ -153,13 +157,11 @@ class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
     lazy var addressFieldView = FormFieldView(textField: addressTextField, placeholder: "地址", icon: "location.fill")
     lazy var notesFieldView = NotesFieldView(textView: notesTextView)
 
-    private lazy var keyboardHeight: CGFloat = keyboardObserver.keyboardHeight {
+    private var keyboardContext = QuickLayoutKeyboardContext.hidden {
         didSet {
-            if oldValue != keyboardHeight {
-                updateContentInset()
+            if oldValue != keyboardContext {
                 animateKeyboardChange()
-                // 键盘高度变化时，重新调整当前激活输入框的位置
-                if keyboardHeight > 0 {
+                if keyboardContext.isVisible {
                     scrollToCurrentActiveField()
                 }
             }
@@ -190,7 +192,7 @@ class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
                     .frame(height: 50)
             }
             .padding(.horizontal, 20)
-            .padding(.horizontal, view.safeAreaInsets.left)
+            .padding(.horizontal, view.quickLayoutSafeAreaInsets.maximumHorizontalInset)
             .padding(.top, view.safeAreaInsets.top + 20)
             .padding(.bottom, max(view.safeAreaInsets.bottom, 10))
         }
@@ -201,6 +203,7 @@ class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
         setupViews()
         setupKeyboardObservers()
         setupGestures()
+        _ = keyboardAvoider
     }
 
     private func setupViews() {
@@ -251,9 +254,9 @@ class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
     }
 
     private func setupKeyboardObservers() {
-        keyboardObserver.$keyboardHeight
-            .sink { [weak self] height in
-                self?.keyboardHeight = height
+        keyboardObserver.$context
+            .sink { [weak self] context in
+                self?.keyboardContext = context
             }
             .store(in: &cancellables)
 
@@ -263,15 +266,9 @@ class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
             .sink { [weak self] notification in
                 if let field = notification.object as? UIView {
                     self?.currentActiveField = field
+                    self?.keyboardAvoider.setActiveView(field)
                     self?.scrollToActiveField(field)
                 }
-            }
-            .store(in: &cancellables)
-
-        // 监听键盘即将显示（用于处理键盘类型切换）
-        NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
-            .sink { [weak self] _ in
-                self?.scrollToCurrentActiveField()
             }
             .store(in: &cancellables)
     }
@@ -282,22 +279,10 @@ class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
         view.addGestureRecognizer(tapGesture)
     }
 
-    private func updateContentInset() {
-        // 直接设置 contentInset 来处理键盘
-        let bottom = keyboardHeight > 0 ? keyboardHeight : view.safeAreaInsets.bottom
-        scrollView.contentInset.bottom = bottom
-        scrollView.verticalScrollIndicatorInsets.bottom = bottom
-    }
-
     private func animateKeyboardChange() {
-        UIView.animate(
-            withDuration: keyboardObserver.animationDuration,
-            delay: 0,
-            options: keyboardObserver.animationCurve,
-            animations: {
-                self.setNeedsLayoutUpdate()
-                self.layoutIfNeeded()
-            }
+        performLayoutUpdate(
+            duration: keyboardContext.animationDuration,
+            options: keyboardContext.animationOptions
         )
     }
 
@@ -307,39 +292,14 @@ class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
     }
 
     private func scrollToActiveField(_ field: UIView?) {
-        guard let field = field, keyboardHeight > 0 else { return }
-
-        // 使用较长的延迟确保键盘动画和布局更新完成
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            guard let self = self else { return }
-
-            // 获取输入框在 scrollView 中的位置
-            let fieldFrame = field.convert(field.bounds, to: self.scrollView)
-
-            // 计算可见区域的高度（scrollView 高度 - 键盘高度）
-            let visibleHeight = self.scrollView.bounds.height - self.keyboardHeight
-
-            // 计算理想的输入框位置（距离可见区域顶部 1/4 处）
-            let idealTopOffset: CGFloat = visibleHeight * 0.25
-
-            // 计算需要滚动到的目标位置
-            let targetY = fieldFrame.minY - idealTopOffset
-
-            // 确保不超过最大滚动范围
-            let maxY = max(0, self.scrollView.contentSize.height - self.scrollView.bounds.height + self.scrollView.contentInset.bottom)
-            let finalY = max(0, min(targetY, maxY))
-
-            // 只有当需要滚动的距离超过一定阈值时才执行滚动
-            let currentOffset = self.scrollView.contentOffset.y
-            if abs(finalY - currentOffset) > 10 {
-                self.scrollView.setContentOffset(CGPoint(x: 0, y: finalY), animated: true)
-            }
-        }
+        keyboardAvoider.setActiveView(field)
+        keyboardAvoider.scrollActiveViewIntoVisibleArea(animated: keyboardContext.isVisible)
     }
 
     @objc private func dismissKeyboard() {
         view.endEditing(true)
         currentActiveField = nil
+        keyboardAvoider.setActiveView(nil)
     }
 
     @objc private func submitTapped() {

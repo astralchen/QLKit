@@ -20,6 +20,64 @@ extension UIView {
             trailing: isRTL ? safeAreaInsets.left : safeAreaInsets.right
         )
     }
+
+    /// The view's directional layout margins expressed as QuickLayout edge
+    /// insets.
+    public var quickLayoutDirectionalLayoutMargins: QuickLayout.EdgeInsets {
+        .init(
+            top: directionalLayoutMargins.top,
+            leading: directionalLayoutMargins.leading,
+            bottom: directionalLayoutMargins.bottom,
+            trailing: directionalLayoutMargins.trailing
+        )
+    }
+
+    /// The view's physical layout margins expressed as directional QuickLayout
+    /// edge insets.
+    public var quickLayoutLayoutMargins: QuickLayout.EdgeInsets {
+        let isRTL = effectiveUserInterfaceLayoutDirection == .rightToLeft
+
+        return .init(
+            top: layoutMargins.top,
+            leading: isRTL ? layoutMargins.right : layoutMargins.left,
+            bottom: layoutMargins.bottom,
+            trailing: isRTL ? layoutMargins.left : layoutMargins.right
+        )
+    }
+
+    /// Insets needed to align content with the readable content guide.
+    public var quickLayoutReadableContentInsets: QuickLayout.EdgeInsets {
+        layoutIfNeeded()
+
+        let readableFrame = readableContentGuide.layoutFrame
+        guard !readableFrame.isEmpty else {
+            return .init()
+        }
+
+        let isRTL = effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let left = max(0, readableFrame.minX - bounds.minX)
+        let right = max(0, bounds.maxX - readableFrame.maxX)
+
+        return .init(
+            top: max(0, readableFrame.minY - bounds.minY),
+            leading: isRTL ? right : left,
+            bottom: max(0, bounds.maxY - readableFrame.maxY),
+            trailing: isRTL ? left : right
+        )
+    }
+
+    /// The maximum of safe-area and directional layout margin insets.
+    public var quickLayoutContentInsets: QuickLayout.EdgeInsets {
+        let safeArea = quickLayoutSafeAreaInsets
+        let margins = quickLayoutDirectionalLayoutMargins
+
+        return .init(
+            top: max(safeArea.top, margins.top),
+            leading: max(safeArea.leading, margins.leading),
+            bottom: max(safeArea.bottom, margins.bottom),
+            trailing: max(safeArea.trailing, margins.trailing)
+        )
+    }
 }
 
 /// Creates a QuickLayout expression by mapping views to layout elements.
