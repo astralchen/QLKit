@@ -24,7 +24,7 @@ Add this repository to your Swift package dependencies:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/astralchen/QLKit.git", branch: "main")
+    .package(url: "https://github.com/astralchen/QuickLayoutKit.git", branch: "main")
 ]
 ```
 
