@@ -57,7 +57,7 @@ final class MessageCell: QuickLayoutCollectionViewCell {
         messageLabel.text = model.message
         avatarView.image = UIImage(systemName: model.imageName)
         avatarView.tintColor = model.themeColor
-        setNeedsLayoutUpdate()
+        setNeedsQuickLayout()
     }
 }
 

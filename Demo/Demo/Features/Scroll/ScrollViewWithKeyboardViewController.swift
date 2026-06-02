@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import AppLocalization
 import QuickLayout
 import QuickLayoutKit
 import Combine
@@ -31,13 +32,18 @@ class FormHeaderView: UIView {
         backgroundColor = .systemBlue.withAlphaComponent(0.1)
         layer.cornerRadius = 16
 
-        titleLabel.text = "用户信息表单"
         titleLabel.font = .systemFont(ofSize: 24, weight: .bold)
         titleLabel.textColor = .systemBlue
 
-        subtitleLabel.text = "请填写以下信息"
         subtitleLabel.font = .systemFont(ofSize: 14)
         subtitleLabel.textColor = .secondaryLabel
+        reloadLocalizedContent()
+    }
+
+    func reloadLocalizedContent() {
+        titleLabel.text = DemoLocalization.text("form.header.title")
+        subtitleLabel.text = DemoLocalization.text("form.header.subtitle")
+        setNeedsLayout()
     }
 
     var body: Layout {
@@ -79,6 +85,11 @@ class FormFieldView: UIView {
         textField.placeholder = placeholder
     }
 
+    func updatePlaceholder(_ placeholder: String) {
+        textField.placeholder = placeholder
+        setNeedsLayout()
+    }
+
     var body: Layout {
         ZStack {
             containerView
@@ -114,9 +125,14 @@ class NotesFieldView: UIView {
     }
 
     private func setupViews() {
-        label.text = "备注"
         label.font = .systemFont(ofSize: 16, weight: .medium)
         label.textColor = .label
+        reloadLocalizedContent()
+    }
+
+    func reloadLocalizedContent() {
+        label.text = DemoLocalization.text("form.notes")
+        setNeedsLayout()
     }
 
     var body: Layout {
@@ -131,7 +147,9 @@ class NotesFieldView: UIView {
 
 // MARK: - Main ViewController
 
-class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
+class ScrollViewWithKeyboardViewController: DemoQuickLayoutHostingController {
+
+    override var localizedTitleKey: String? { "demo.form.title" }
 
     let scrollView = QuickLayoutScrollView()
     let keyboardObserver = QuickLayoutKeyboardObserver()
@@ -207,7 +225,6 @@ class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
     }
 
     private func setupViews() {
-        title = "表单示例"
         scrollView.backgroundColor = .systemBackground
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.keyboardDismissMode = .interactive
@@ -240,7 +257,6 @@ class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
 
         // Configure Submit Button
         var config = UIButton.Configuration.filled()
-        config.title = "提交表单"
         config.cornerStyle = .large
         config.baseBackgroundColor = .systemBlue
         config.baseForegroundColor = .white
@@ -251,6 +267,31 @@ class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
 
         submitButton.configuration = config
         submitButton.addTarget(self, action: #selector(submitTapped), for: .touchUpInside)
+        reloadLocalizedContent()
+    }
+
+    override func reloadLocalizedContent() {
+        super.reloadLocalizedContent()
+        headerView.reloadLocalizedContent()
+        nameFieldView.updatePlaceholder(DemoLocalization.text("form.name"))
+        emailFieldView.updatePlaceholder(DemoLocalization.text("form.email"))
+        phoneFieldView.updatePlaceholder(DemoLocalization.text("form.phone"))
+        addressFieldView.updatePlaceholder(DemoLocalization.text("form.address"))
+        notesFieldView.reloadLocalizedContent()
+        submitButton.configuration?.title = DemoLocalization.text("form.submit")
+    }
+
+    override func reloadLayoutDirection(_ direction: UIUserInterfaceLayoutDirection) {
+        super.reloadLayoutDirection(direction)
+        let attribute = direction.appLayoutDirection.semanticContentAttribute
+        let inputViews: [UIView] = [nameTextField, emailTextField, phoneTextField, addressTextField, notesTextView]
+        inputViews.forEach {
+            $0.semanticContentAttribute = attribute
+        }
+        [nameTextField, emailTextField, phoneTextField, addressTextField].forEach {
+            $0.textAlignment = direction == .rightToLeft ? .right : .left
+        }
+        notesTextView.textAlignment = direction == .rightToLeft ? .right : .left
     }
 
     private func setupKeyboardObservers() {
@@ -305,16 +346,17 @@ class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
     @objc private func submitTapped() {
         dismissKeyboard()
 
-        let formData = """
-        姓名: \(nameTextField.text ?? "")
-        邮箱: \(emailTextField.text ?? "")
-        电话: \(phoneTextField.text ?? "")
-        地址: \(addressTextField.text ?? "")
-        备注: \(notesTextView.text ?? "")
-        """
+        let formData = DemoLocalization.text(
+            "form.summary",
+            nameTextField.text ?? "",
+            emailTextField.text ?? "",
+            phoneTextField.text ?? "",
+            addressTextField.text ?? "",
+            notesTextView.text ?? ""
+        )
 
-        let alert = UIAlertController(title: "表单提交", message: formData, preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "确定", style: .default))
+        let alert = UIAlertController(title: DemoLocalization.text("form.alert.title"), message: formData, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: DemoLocalization.text("common.ok"), style: .default))
         present(alert, animated: true)
     }
 }

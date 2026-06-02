@@ -2,7 +2,7 @@ import UIKit
 import QuickLayout
 
 /// A collection view cell whose content is described by QuickLayout.
-open class QuickLayoutCollectionViewCell: UICollectionViewCell, HasBody, QuickLayoutLayoutUpdating {
+open class QuickLayoutCollectionViewCell: UICollectionViewCell, HasBody, QuickLayoutUpdating {
 
     /// The cell's horizontal sizing flexibility.
     open var quickLayoutHorizontalFlexibility: Flexibility = .fullyFlexible
@@ -69,13 +69,17 @@ open class QuickLayoutCollectionViewCell: UICollectionViewCell, HasBody, QuickLa
         }
     }
 
-    open func setNeedsLayoutUpdate() {
+    open func setNeedsQuickLayout() {
         setNeedsLayout()
+    }
+
+    open func quickLayoutIfNeeded() {
+        layoutIfNeeded()
     }
 }
 
 /// A table view cell whose content is described by QuickLayout.
-open class QuickLayoutTableViewCell: UITableViewCell, HasBody, QuickLayoutLayoutUpdating {
+open class QuickLayoutTableViewCell: UITableViewCell, HasBody, QuickLayoutUpdating {
 
     private var contentProvider: (() -> Layout)?
 
@@ -127,13 +131,17 @@ open class QuickLayoutTableViewCell: UITableViewCell, HasBody, QuickLayoutLayout
         _QuickLayoutViewImplementation.sizeThatFits(self, size: size) ?? super.sizeThatFits(size)
     }
 
-    open func setNeedsLayoutUpdate() {
+    open func setNeedsQuickLayout() {
         setNeedsLayout()
+    }
+
+    open func quickLayoutIfNeeded() {
+        layoutIfNeeded()
     }
 }
 
 /// A collection reusable view whose content is described by QuickLayout.
-open class QuickLayoutCollectionReusableView: UICollectionReusableView, HasBody, QuickLayoutLayoutUpdating {
+open class QuickLayoutCollectionReusableView: UICollectionReusableView, HasBody, QuickLayoutUpdating {
 
     private var contentProvider: (() -> Layout)?
 
@@ -184,7 +192,11 @@ open class QuickLayoutCollectionReusableView: UICollectionReusableView, HasBody,
         return attributes
     }
 
-    open func setNeedsLayoutUpdate() {
+    open func setNeedsQuickLayout() {
         setNeedsLayout()
+    }
+
+    open func quickLayoutIfNeeded() {
+        layoutIfNeeded()
     }
 }

@@ -66,7 +66,7 @@ final class CounterViewController: QuickLayoutHostingController {
     private var count = 0 {
         didSet {
             counterLabel.text = "\(count)"
-            setNeedsLayoutUpdate()
+            setNeedsQuickLayout()
         }
     }
 
@@ -114,7 +114,7 @@ let viewController = QuickLayoutHostingController {
 }
 ```
 
-Call `setNeedsLayoutUpdate()` after mutating state that changes `body`.
+Call `setNeedsQuickLayout()` after mutating state that changes `body`.
 
 ### `QuickLayoutView`
 
@@ -133,19 +133,71 @@ let hostedView = QuickLayoutView {
     .padding(.all, 16)
 }
 
-hostedView.setNeedsLayoutUpdate()
+hostedView.setNeedsQuickLayout()
 let measured = hostedView.sizeThatFits(in: CGSize(width: 320, height: .infinity))
 ```
 
 You can also subclass `QuickLayoutView` and override `body` for reusable UIKit
 components.
 
+### `QuickLayoutViewControllerRepresentable`
+
+`QuickLayoutViewControllerRepresentable` embeds a child `UIViewController`
+inside a QuickLayout `body`. It only handles UIKit containment and resolves its
+parent view controller from the UIKit responder chain when QuickLayout inserts
+the host view. Lazy creation is provided by QuickLayout's existing `LazyView`, so
+the child controller is not created until the lazy element is first read by
+QuickLayout.
+
+```swift
+final class ParentViewController: QuickLayoutHostingController {
+
+    private var showsChild = false
+
+    private lazy var lazyChild = LazyView { [unowned self] in
+        let child = ChildViewController()
+        let host = QuickLayoutViewControllerRepresentable(child)
+        host.eventHandler = { event in
+            print("representable event:", event.name)
+        }
+        return host
+    }
+
+    override var body: Layout {
+        VStack(spacing: 16) {
+            if showsChild {
+                lazyChild.frame(height: 320)
+            }
+        }
+    }
+
+    func replaceLoadedChild() {
+        lazyChild.ifLoaded?.setViewController(ChildViewController())
+    }
+
+    func resetLazyChild() {
+        lazyChild.ifLoaded?.dismantleViewController()
+        lazyChild = LazyView { [unowned self] in
+            QuickLayoutViewControllerRepresentable(ChildViewController())
+        }
+    }
+}
+```
+
+The representable attaches the child in `didMoveToSuperview` when QuickLayout
+inserts the host view, and detaches the child when QuickLayout removes the host
+view. A loaded `LazyView` keeps its host instance; replace the stored `LazyView`
+when the next display should create a fresh child controller. Use
+`captureParent(_:)` or `init(_:parent:)` only when the host does not live under a
+standard controller-owned UIKit view hierarchy.
+
 ### Layout updating
 
 `QuickLayoutHostingController`, `QuickLayoutView`, and the list integration
-views conform to `QuickLayoutLayoutUpdating`. Use
-`setNeedsLayoutUpdate()` after state changes and `performLayoutUpdate(...)` when
-the layout should animate with UIKit.
+views conform to `QuickLayoutUpdating`. Use
+`setNeedsQuickLayout()` after state changes, `quickLayoutIfNeeded()` when the
+layout must be resolved immediately, and `performLayoutUpdate(...)` when the
+layout should animate with UIKit.
 
 ### `QuickLayoutScrollView`
 
@@ -206,6 +258,48 @@ scrollView.scrollTo(.bottom, animated: true)
 
 `scrollToBeginning(animated:)` and `scrollToEnd(animated:)` remain available as
 convenience methods.
+
+### Layout direction
+
+QuickLayout already supports layout direction through `.layoutDirection(...)`.
+Use it for QuickLayout-managed leading and trailing layout instead of manually
+setting `textAlignment` on every label.
+
+```swift
+private lazy var menuContentView = QuickLayoutView { [unowned self] in
+    VStack(alignment: .leading, spacing: 12) {
+        ForEach(self.menuViews) { view in
+            self.menuElement(for: view)
+        }
+    }
+    .padding(.horizontal, 16)
+    .layoutDirection(self.currentQuickLayoutDirection)
+}
+
+private var currentQuickLayoutDirection: LayoutDirection {
+    effectiveUserInterfaceLayoutDirection == .rightToLeft
+        ? .rightToLeft
+        : .leftToRight
+}
+
+private func menuElement(for view: UIView) -> Element {
+    if view is UILabel {
+        return view.frame(height: 28)
+    }
+
+    return view
+        .resizable()
+        .frame(height: 44)
+}
+```
+
+Keep text views and labels on `.natural` alignment when the layout position is
+owned by QuickLayout. For example, a section header can remain
+`textAlignment = .natural` and `semanticContentAttribute = .unspecified`, while
+`VStack(alignment: .leading)` and `.layoutDirection(.rightToLeft)` move it to
+the physical right side. Use UIKit `semanticContentAttribute` for UIKit-owned
+behavior such as scroll view semantics, navigation bars, collection views, and
+system controls.
 
 ### Keyboard helpers
 
@@ -319,6 +413,11 @@ The `Demo` project contains examples for:
 - UIKit semantic content direction behavior
 - Environment inset helpers
 - Debug diagnostics
+- Lazy view controller containment with `QuickLayoutViewControllerRepresentable`
+- Runtime language switching with String Catalogs and AppLocalization
+- QuickLayout-driven LTR/RTL layout direction for menu headers
+- UIKit, collection view, navigation, gesture, modal, and SwiftUI localization
+  bridge examples
 
 Open `Demo/Demo.xcodeproj` in Xcode and run the `Demo` scheme to explore the
 examples.

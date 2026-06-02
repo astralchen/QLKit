@@ -9,7 +9,9 @@ import UIKit
 import QuickLayout
 import QuickLayoutKit
 
-class DashboardViewController: QuickLayoutHostingController {
+class DashboardViewController: DemoQuickLayoutHostingController {
+
+    override var localizedTitleKey: String? { "demo.dashboard.title" }
 
     let profileImageView = UIImageView()
     let nameLabel = UILabel()
@@ -29,19 +31,23 @@ class DashboardViewController: QuickLayoutHostingController {
         profileImageView.clipsToBounds = true
         profileImageView.tintColor = .systemPink
 
-        nameLabel.text = "Jane Smith"
         nameLabel.font = .systemFont(ofSize: 18, weight: .semibold)
 
-        scoreLabel.text = "Score: 1250"
         scoreLabel.font = .systemFont(ofSize: 14)
 
-        achievementLabel.text = "🏆 Top Performer"
         achievementLabel.font = .systemFont(ofSize: 12)
 
         [statsView1, statsView2, statsView3].forEach {
             $0.backgroundColor = .systemGray6
             $0.layer.cornerRadius = 8
         }
+    }
+
+    override func reloadLocalizedContent() {
+        super.reloadLocalizedContent()
+        nameLabel.text = DemoLocalization.text("dashboard.name")
+        scoreLabel.text = DemoLocalization.text("dashboard.score", 1250)
+        achievementLabel.text = DemoLocalization.text("dashboard.achievement")
     }
 
     override var body: Layout {

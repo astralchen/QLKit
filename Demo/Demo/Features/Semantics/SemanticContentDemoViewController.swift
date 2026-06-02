@@ -39,7 +39,9 @@ UIKit semanticContentAttribute 行为整理（实战版）
 */
 
 // MARK: - Main Demo Controller
-class SemanticContentDemoViewController: QuickLayoutHostingController {
+class SemanticContentDemoViewController: DemoQuickLayoutHostingController {
+
+    override var localizedTitleKey: String? { "demo.semantic.title" }
 
     let scrollView = QuickLayoutScrollView()
     let titleLabel = UILabel()
@@ -47,17 +49,17 @@ class SemanticContentDemoViewController: QuickLayoutHostingController {
 
     // Demo sections
     let unspecifiedSection = DemoSection(
-        title: "1. Unspecified (默认)",
+        titleKey: "semantic.unspecified",
         semantic: .unspecified
     )
 
     let ltrSection = DemoSection(
-        title: "2. Force Left-to-Right",
+        titleKey: "semantic.ltr",
         semantic: .forceLeftToRight
     )
 
     let rtlSection = DemoSection(
-        title: "3. Force Right-to-Left",
+        titleKey: "semantic.rtl",
         semantic: .forceRightToLeft
     )
 
@@ -65,15 +67,22 @@ class SemanticContentDemoViewController: QuickLayoutHostingController {
         super.viewDidLoad()
         view.backgroundColor = .systemBackground
 
-        titleLabel.text = "UISemanticContentAttribute Demo"
         titleLabel.font = .systemFont(ofSize: 24, weight: .bold)
         titleLabel.textAlignment = .center
 
-        descLabel.text = "观察 forceLeftToRight 和 forceRightToLeft 的布局差异"
         descLabel.font = .systemFont(ofSize: 14)
         descLabel.textColor = .secondaryLabel
         descLabel.textAlignment = .center
         descLabel.numberOfLines = 0
+    }
+
+    override func reloadLocalizedContent() {
+        super.reloadLocalizedContent()
+        titleLabel.text = DemoLocalization.text("semantic.header.title")
+        descLabel.text = DemoLocalization.text("semantic.header.subtitle")
+        unspecifiedSection.reloadLocalizedContent()
+        ltrSection.reloadLocalizedContent()
+        rtlSection.reloadLocalizedContent()
     }
 
     override var body: Layout {
@@ -121,11 +130,14 @@ class DemoSection: UIView {
     // Example 5: Progress bar
     let example5 = ExampleRow5()
 
-    init(title: String, semantic: UISemanticContentAttribute) {
+    let titleKey: String
+
+    init(titleKey: String, semantic: UISemanticContentAttribute) {
+        self.titleKey = titleKey
         self.semantic = semantic
         super.init(frame: .zero)
 
-        setupViews(title: title)
+        setupViews()
         self.semanticContentAttribute = semantic
     }
 
@@ -133,11 +145,10 @@ class DemoSection: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    private func setupViews(title: String) {
+    private func setupViews() {
         backgroundColor = .systemGray6
         layer.cornerRadius = 12
 
-        titleLabel.text = title
         titleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
 
         example1.semanticContentAttribute = semantic
@@ -145,6 +156,16 @@ class DemoSection: UIView {
         example3.semanticContentAttribute = semantic
         example4.semanticContentAttribute = semantic
         example5.semanticContentAttribute = semantic
+        reloadLocalizedContent()
+    }
+
+    func reloadLocalizedContent() {
+        titleLabel.text = DemoLocalization.text(titleKey)
+        example1.reloadLocalizedContent()
+        example2.reloadLocalizedContent()
+        example3.reloadLocalizedContent()
+        example4.reloadLocalizedContent()
+        setNeedsLayout()
     }
 
     var body: Layout {
@@ -185,8 +206,8 @@ class ExampleRow1: UIView {
         iconLabel.text = "📱"
         iconLabel.font = .systemFont(ofSize: 32)
 
-        textLabel.text = "手机图标"
         textLabel.font = .systemFont(ofSize: 16)
+        reloadLocalizedContent()
     }
 
     required init?(coder: NSCoder) {
@@ -201,6 +222,11 @@ class ExampleRow1: UIView {
             Spacer()
         }
         .padding(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
+    }
+
+    func reloadLocalizedContent() {
+        textLabel.text = DemoLocalization.text("semantic.phone")
+        setNeedsLayout()
     }
 }
 
@@ -221,9 +247,9 @@ class ExampleRow2: UIView {
         trailingView.backgroundColor = .systemRed
         trailingView.layer.cornerRadius = 4
 
-        centerLabel.text = "Leading ↔ Trailing"
         centerLabel.font = .systemFont(ofSize: 14)
         centerLabel.textAlignment = .center
+        reloadLocalizedContent()
     }
 
     required init?(coder: NSCoder) {
@@ -239,6 +265,11 @@ class ExampleRow2: UIView {
                 .frame(width: 40, height: 40)
         }
         .padding(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
+    }
+
+    func reloadLocalizedContent() {
+        centerLabel.text = DemoLocalization.text("semantic.leadingTrailing")
+        setNeedsLayout()
     }
 }
 
@@ -257,9 +288,9 @@ class ExampleRow3: UIView {
         imageView.contentMode = .scaleAspectFill
         imageView.clipsToBounds = true
 
-        descLabel.text = "头像和描述文字"
         descLabel.font = .systemFont(ofSize: 14)
         descLabel.numberOfLines = 2
+        reloadLocalizedContent()
     }
 
     required init?(coder: NSCoder) {
@@ -276,6 +307,11 @@ class ExampleRow3: UIView {
         }
         .padding(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
     }
+
+    func reloadLocalizedContent() {
+        descLabel.text = DemoLocalization.text("semantic.avatar")
+        setNeedsLayout()
+    }
 }
 
 @QuickLayout
@@ -287,14 +323,12 @@ class ExampleRow4: UIView {
         backgroundColor = .systemBackground
         layer.cornerRadius = 8
 
-        button.setTitle(" 下一步", for: .normal)
         button.setImage(UIImage(systemName: "arrow.right"), for: .normal)
         button.backgroundColor = .systemBlue
         button.tintColor = .white
         button.setTitleColor(.white, for: .normal)
         button.layer.cornerRadius = 8
-
-
+        reloadLocalizedContent()
     }
 
 //    override var semanticContentAttribute: UISemanticContentAttribute {
@@ -323,6 +357,11 @@ class ExampleRow4: UIView {
         button
             .frame(height: 44)
             .padding(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
+    }
+
+    func reloadLocalizedContent() {
+        button.setTitle(" \(DemoLocalization.text("semantic.next"))", for: .normal)
+        setNeedsLayout()
     }
 }
 

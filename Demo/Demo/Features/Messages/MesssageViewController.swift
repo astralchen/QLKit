@@ -6,8 +6,11 @@
 //
 
 import UIKit
+import AppLocalization
 
-final class MesssageViewController: UIViewController {
+final class MesssageViewController: DemoViewController {
+
+    override var localizedTitleKey: String? { "demo.messages.title" }
 
     private var collectionView: UICollectionView!
     private var data: [MessageModel] = MessageModel.mockData
@@ -17,6 +20,22 @@ final class MesssageViewController: UIViewController {
 
         view.backgroundColor = .white
         setupCollectionView()
+        reloadLocalizedContent()
+        reloadLayoutDirection(DemoLocalization.currentUIKitDirection)
+    }
+
+    override func reloadLocalizedContent() {
+        super.reloadLocalizedContent()
+        data = MessageModel.localizedMockData()
+        collectionView?.reloadData()
+    }
+
+    override func reloadLayoutDirection(_ direction: UIUserInterfaceLayoutDirection) {
+        super.reloadLayoutDirection(direction)
+        collectionView?.applyUserInterfaceLayoutDirection(
+            direction.appLayoutDirection,
+            preservingVisibleItem: false
+        )
     }
 
     private func setupCollectionView() {

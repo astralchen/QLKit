@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import QuartzCore
 import QuickLayout
 
 /// Edges that a `QuickLayoutScrollView` can scroll to.
@@ -71,6 +72,8 @@ open class QuickLayoutScrollView: UIScrollView, HasBody {
             setNeedsLayout()
         }
     }
+
+    private var pendingScrollRequest: PendingScrollRequest?
 
     // MARK: - Initialization
 
@@ -141,16 +144,23 @@ open class QuickLayoutScrollView: UIScrollView, HasBody {
             size: proposedSize
         ) ?? .zero
 
+        let layoutDirection: LayoutDirection = effectiveUserInterfaceLayoutDirection == .rightToLeft
+            ? .rightToLeft
+            : .leftToRight
+
         // Apply layout with proper alignment
         body.applyFrame(
             CGRect(origin: .zero, size: contentSize),
-            alignment: contentAlignment
+            alignment: contentAlignment,
+            layoutDirection: layoutDirection
         )
 
         // Update scrollView's contentSize
         if self.contentSize != contentSize {
             self.contentSize = contentSize
         }
+
+        applyPendingScrollRequestIfPossible()
     }
 
     // MARK: - Private Helpers
@@ -274,7 +284,7 @@ extension QuickLayoutScrollView {
     ///
     /// - Parameter animated: Pass `true` to animate the change.
     public func scrollToBeginning(animated: Bool = true) {
-        scrollTo(axis == .vertical ? .top : .leading, animated: animated)
+        performScrollRequest(.beginning(animated: animated))
     }
 
     /// Scrolls to the end of the content.
@@ -284,7 +294,7 @@ extension QuickLayoutScrollView {
     ///
     /// - Parameter animated: Pass `true` to animate the change.
     public func scrollToEnd(animated: Bool = true) {
-        scrollTo(axis == .vertical ? .bottom : .trailing, animated: animated)
+        performScrollRequest(.end(animated: animated))
     }
 
     /// Scrolls to the specified edge.
@@ -293,29 +303,123 @@ extension QuickLayoutScrollView {
     ///   - edge: The edge to scroll to.
     ///   - animated: Pass `true` to animate the change.
     public func scrollTo(_ edge: QuickLayoutScrollEdge, animated: Bool = true) {
+        performScrollRequest(.edge(edge, animated: animated))
+    }
+
+    private func performScrollRequest(_ request: PendingScrollRequest) {
         // Force layout to ensure contentSize is up to date
         layoutIfNeeded()
 
+        guard let edge = edge(for: request),
+              canResolveScrollOffset(for: edge) else {
+            pendingScrollRequest = request
+            return
+        }
+
+        setContentOffset(targetOffset(for: edge), requestedAnimated: request.animated)
+    }
+
+    private func targetOffset(for edge: QuickLayoutScrollEdge) -> CGPoint {
         // Get the effective contentInset (including safe area)
         let adjustedInset = adjustedContentInset
 
-        let targetOffset: CGPoint
         switch edge {
         case .top:
-            targetOffset = CGPoint(x: contentOffset.x, y: -adjustedInset.top)
+            return CGPoint(x: contentOffset.x, y: -adjustedInset.top)
 
         case .bottom:
             let offsetY = contentSize.height - bounds.height + adjustedInset.bottom
-            targetOffset = CGPoint(x: contentOffset.x, y: max(-adjustedInset.top, offsetY))
+            return CGPoint(x: contentOffset.x, y: max(-adjustedInset.top, offsetY))
 
         case .leading:
-            targetOffset = CGPoint(x: -adjustedInset.left, y: contentOffset.y)
+            return CGPoint(x: horizontalOffset(for: .leading, adjustedInset: adjustedInset), y: contentOffset.y)
 
         case .trailing:
-            let offsetX = contentSize.width - bounds.width + adjustedInset.right
-            targetOffset = CGPoint(x: max(-adjustedInset.left, offsetX), y: contentOffset.y)
+            return CGPoint(x: horizontalOffset(for: .trailing, adjustedInset: adjustedInset), y: contentOffset.y)
+        }
+    }
+
+    private func applyPendingScrollRequestIfPossible() {
+        guard let pendingScrollRequest,
+              let edge = edge(for: pendingScrollRequest),
+              canResolveScrollOffset(for: edge) else {
+            return
         }
 
-        setContentOffset(targetOffset, animated: animated)
+        self.pendingScrollRequest = nil
+        setContentOffset(
+            targetOffset(for: edge),
+            requestedAnimated: pendingScrollRequest.animated
+        )
+    }
+
+    private func edge(for request: PendingScrollRequest) -> QuickLayoutScrollEdge? {
+        switch request {
+        case .edge(let edge, _):
+            return edge
+        case .beginning:
+            return axis == .vertical ? .top : .leading
+        case .end:
+            return axis == .vertical ? .bottom : .trailing
+        }
+    }
+
+    private func canResolveScrollOffset(for edge: QuickLayoutScrollEdge) -> Bool {
+        switch edge {
+        case .top, .bottom:
+            bounds.height > 0 && contentSize.height > 0
+        case .leading, .trailing:
+            bounds.width > 0 && contentSize.width > 0
+        }
+    }
+
+    private func horizontalOffset(
+        for edge: QuickLayoutScrollEdge,
+        adjustedInset: UIEdgeInsets
+    ) -> CGFloat {
+        let minimumOffset = -adjustedInset.left
+        let maximumOffset = max(
+            minimumOffset,
+            contentSize.width - bounds.width + adjustedInset.right
+        )
+        let isRightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
+
+        switch (edge, isRightToLeft) {
+        case (.leading, false), (.trailing, true):
+            return minimumOffset
+        case (.leading, true), (.trailing, false):
+            return maximumOffset
+        default:
+            return contentOffset.x
+        }
+    }
+
+    private func setContentOffset(_ contentOffset: CGPoint, requestedAnimated animated: Bool) {
+        guard !animated else {
+            setContentOffset(contentOffset, animated: true)
+            return
+        }
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        UIView.performWithoutAnimation {
+            setContentOffset(contentOffset, animated: false)
+            layer.removeAnimation(forKey: "bounds")
+            layer.removeAnimation(forKey: "position")
+        }
+        CATransaction.commit()
+    }
+}
+
+private enum PendingScrollRequest {
+    case edge(QuickLayoutScrollEdge, animated: Bool)
+    case beginning(animated: Bool)
+    case end(animated: Bool)
+
+    var animated: Bool {
+        switch self {
+        case .edge(_, let animated), .beginning(let animated), .end(let animated):
+            return animated
+        }
     }
 }

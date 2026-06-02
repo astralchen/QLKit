@@ -9,12 +9,21 @@ import UIKit
 import QuickLayout
 import QuickLayoutKit
 
-class KeyboardHandlingViewController: QuickLayoutHostingController {
+class KeyboardHandlingViewController: DemoQuickLayoutHostingController {
+
+    override var localizedTitleKey: String? { "demo.keyboard.title" }
+
+    private let keyboardView = AnimatedKeyboardResponsiveView()
 
     override var body: any Layout {
         ZStack {
-            AnimatedKeyboardResponsiveView()
+            keyboardView
         }
+    }
+
+    override func reloadLocalizedContent() {
+        super.reloadLocalizedContent()
+        keyboardView.reloadLocalizedContent()
     }
 
 }

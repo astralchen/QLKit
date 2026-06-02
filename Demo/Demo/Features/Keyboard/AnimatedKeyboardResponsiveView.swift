@@ -43,15 +43,19 @@ class AnimatedKeyboardResponsiveView: UIView {
     }
 
     private func setupViews() {
-        textField.placeholder = "输入文本"
         textField.borderStyle = .roundedRect
 
-
         var config = UIButton.Configuration.filled()
-        config.title = "提交"
         config.cornerStyle = .capsule     // ✅ 胶囊
         submitButton.configuration = config
         submitButton.addTarget(self, action: #selector(dismissKeyboard), for: .touchUpInside)
+        reloadLocalizedContent()
+    }
+
+    func reloadLocalizedContent() {
+        textField.placeholder = DemoLocalization.text("keyboard.placeholder")
+        submitButton.configuration?.title = DemoLocalization.text("common.submit")
+        setNeedsLayout()
     }
 
     @objc private func dismissKeyboard() {

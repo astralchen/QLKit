@@ -6,7 +6,7 @@ import QuickLayout
 /// Use `QuickLayoutView` when a QuickLayout hierarchy needs to be embedded in
 /// an existing UIKit view controller, table view cell, collection view cell, or
 /// reusable view without introducing a dedicated view controller subclass.
-open class QuickLayoutView: UIView, HasBody, QuickLayoutLayoutUpdating {
+open class QuickLayoutView: UIView, HasBody, QuickLayoutUpdating {
 
     private var contentProvider: (() -> Layout)?
 
@@ -62,8 +62,13 @@ open class QuickLayoutView: UIView, HasBody, QuickLayoutLayoutUpdating {
     }
 
     /// Invalidates the hosted layout.
-    open func setNeedsLayoutUpdate() {
+    open func setNeedsQuickLayout() {
         setNeedsLayout()
+    }
+
+    /// Lays out the hosted QuickLayout content immediately if needed.
+    open func quickLayoutIfNeeded() {
+        layoutIfNeeded()
     }
 
     /// Returns the size that best fits the specified constraints.

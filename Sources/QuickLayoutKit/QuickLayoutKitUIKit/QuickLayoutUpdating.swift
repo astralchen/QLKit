@@ -2,16 +2,16 @@ import UIKit
 
 /// A type that can invalidate and immediately lay out QuickLayout content.
 @MainActor
-public protocol QuickLayoutLayoutUpdating: AnyObject {
+public protocol QuickLayoutUpdating: AnyObject {
 
     /// Invalidates the hosted QuickLayout content.
-    func setNeedsLayoutUpdate()
+    func setNeedsQuickLayout()
 
     /// Lays out the hosted QuickLayout content immediately if needed.
-    func layoutIfNeeded()
+    func quickLayoutIfNeeded()
 }
 
-extension QuickLayoutLayoutUpdating where Self: UIView {
+extension QuickLayoutUpdating where Self: UIView {
 
     /// Invalidates and lays out QuickLayout content inside a UIKit animation.
     ///
@@ -28,21 +28,21 @@ extension QuickLayoutLayoutUpdating where Self: UIView {
         animations: (() -> Void)? = nil,
         completion: ((Bool) -> Void)? = nil
     ) {
-        setNeedsLayoutUpdate()
+        setNeedsQuickLayout()
         UIView.animate(
             withDuration: duration,
             delay: delay,
             options: options,
             animations: {
                 animations?()
-                self.layoutIfNeeded()
+                self.quickLayoutIfNeeded()
             },
             completion: completion
         )
     }
 }
 
-extension QuickLayoutLayoutUpdating where Self: UIViewController {
+extension QuickLayoutUpdating where Self: UIViewController {
 
     /// Invalidates and lays out QuickLayout content inside a UIKit animation.
     ///
@@ -59,14 +59,14 @@ extension QuickLayoutLayoutUpdating where Self: UIViewController {
         animations: (() -> Void)? = nil,
         completion: ((Bool) -> Void)? = nil
     ) {
-        setNeedsLayoutUpdate()
+        setNeedsQuickLayout()
         UIView.animate(
             withDuration: duration,
             delay: delay,
             options: options,
             animations: {
                 animations?()
-                self.layoutIfNeeded()
+                self.quickLayoutIfNeeded()
             },
             completion: completion
         )

@@ -8,8 +8,10 @@
 import CoreGraphics
 import Testing
 import UIKit
+import AppLocalization
 import QuickLayout
 import QuickLayoutKit
+@testable import Demo
 
 @MainActor
 struct DemoTests {
@@ -59,6 +61,128 @@ struct DemoTests {
 
         #expect(scrollView.contentSize.height >= 240)
         #expect(scrollView.contentOffset.y > 0)
+    }
+
+    @Test func horizontalScrollEdgesFollowSemanticDirection() {
+        let first = UIView()
+        let second = UIView()
+        let scrollView = QuickLayoutScrollView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+
+        scrollView.updateContent(axis: .horizontal) {
+            first.frame(width: 120)
+            second.frame(width: 120)
+        }
+        scrollView.layoutIfNeeded()
+
+        let leadingLTR = -scrollView.adjustedContentInset.left
+        let trailingLTR = max(
+            leadingLTR,
+            scrollView.contentSize.width - scrollView.bounds.width + scrollView.adjustedContentInset.right
+        )
+
+        scrollView.semanticContentAttribute = .forceLeftToRight
+        scrollView.scrollTo(.leading, animated: false)
+        #expect(scrollView.contentOffset.x == leadingLTR)
+        scrollView.scrollTo(.trailing, animated: false)
+        #expect(scrollView.contentOffset.x == trailingLTR)
+
+        scrollView.semanticContentAttribute = .forceRightToLeft
+        scrollView.scrollTo(.leading, animated: false)
+        #expect(scrollView.contentOffset.x == trailingLTR)
+        scrollView.scrollTo(.trailing, animated: false)
+        #expect(scrollView.contentOffset.x == leadingLTR)
+    }
+
+    @Test func horizontalScrollViewAppliesRTLDirectionToContentLayout() {
+        let first = UIView()
+        let second = UIView()
+        let scrollView = QuickLayoutScrollView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        scrollView.semanticContentAttribute = .forceRightToLeft
+
+        scrollView.updateContent(axis: .horizontal) {
+            first.frame(width: 120)
+            second.frame(width: 120)
+        }
+        scrollView.layoutIfNeeded()
+
+        #expect(first.frame.minX > second.frame.minX)
+    }
+
+    @Test func horizontalScrollViewDefersRTLBeginningUntilContentIsMeasured() {
+        let first = UIView()
+        let second = UIView()
+        let scrollView = QuickLayoutScrollView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        scrollView.axis = .horizontal
+        scrollView.semanticContentAttribute = .forceRightToLeft
+        scrollView.scrollToBeginning(animated: false)
+
+        scrollView.updateContent(axis: .horizontal) {
+            first.frame(width: 120)
+            second.frame(width: 120)
+        }
+        scrollView.layoutIfNeeded()
+
+        let expectedOffset = max(
+            -scrollView.adjustedContentInset.left,
+            scrollView.contentSize.width - scrollView.bounds.width + scrollView.adjustedContentInset.right
+        )
+        #expect(scrollView.contentOffset.x == expectedOffset)
+    }
+
+    @Test func horizontalScrollDemoStartsFromRightInRTL() {
+        let viewController = HorizontalScrollViewViewController()
+        viewController.loadViewIfNeeded()
+        viewController.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        viewController.reloadLayoutDirection(.rightToLeft)
+        viewController.view.setNeedsLayout()
+        viewController.view.layoutIfNeeded()
+
+        let firstCardFrame = viewController.views[0].convert(
+            viewController.views[0].bounds,
+            to: viewController.scrollView
+        )
+        let visibleRect = CGRect(
+            origin: viewController.scrollView.contentOffset,
+            size: viewController.scrollView.bounds.size
+        )
+
+        #expect(firstCardFrame.maxX <= visibleRect.maxX)
+        #expect(firstCardFrame.maxX > visibleRect.maxX - 80)
+    }
+
+    @Test func pendingInitialScrollDoesNotAnimateInsideUIKitAnimationContext() {
+        let first = UIView()
+        let second = UIView()
+        let scrollView = QuickLayoutScrollView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        scrollView.axis = .horizontal
+        scrollView.semanticContentAttribute = .forceRightToLeft
+        scrollView.scrollToBeginning(animated: false)
+
+        scrollView.updateContent(axis: .horizontal) {
+            first.frame(width: 120)
+            second.frame(width: 120)
+        }
+
+        UIView.animate(withDuration: 0.25) {
+            scrollView.layoutIfNeeded()
+        }
+
+        let animationKeys = scrollView.layer.animationKeys() ?? []
+
+        #expect(!animationKeys.contains("bounds"))
+        #expect(!animationKeys.contains("position"))
+    }
+
+    @Test func horizontalScrollDemoPreparesRTLStartBeforeAppearAnimation() {
+        let viewController = HorizontalScrollViewViewController()
+        viewController.loadViewIfNeeded()
+        viewController.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        viewController.reloadLayoutDirection(.rightToLeft)
+
+        viewController.beginAppearanceTransition(true, animated: true)
+        viewController.endAppearanceTransition()
+
+        #expect(viewController.scrollView.contentOffset.x > 0)
     }
 
     @Test func keyboardContextParsesUIKitNotification() throws {
@@ -161,5 +285,392 @@ struct DemoTests {
 
         QuickLayoutDiagnostics.isEnabled = false
         QuickLayoutDiagnostics.reset()
+    }
+
+    @Test func lazyRepresentableDoesNotLoadUntilIncludedInBody() {
+        let parent = UIViewController()
+        parent.loadViewIfNeeded()
+
+        var loadCount = 0
+        let lazyRepresentable = LazyView {
+            loadCount += 1
+            return QuickLayoutViewControllerRepresentable(RepresentableTestChildViewController(name: "A"))
+        }
+
+        var showsChild = false
+        let containerView = QuickLayoutView {
+            VStack {
+                if showsChild {
+                    lazyRepresentable.frame(height: 120)
+                }
+            }
+        }
+        containerView.frame = CGRect(x: 0, y: 0, width: 240, height: 200)
+        parent.view.addSubview(containerView)
+
+        containerView.setNeedsQuickLayout()
+        containerView.quickLayoutIfNeeded()
+
+        #expect(!lazyRepresentable.isLoaded)
+        #expect(lazyRepresentable.ifLoaded == nil)
+        #expect(loadCount == 0)
+
+        showsChild = true
+        containerView.setNeedsQuickLayout()
+        containerView.quickLayoutIfNeeded()
+
+        #expect(lazyRepresentable.isLoaded)
+        #expect(lazyRepresentable.ifLoaded != nil)
+        #expect(loadCount == 1)
+    }
+
+    @Test func representableAttachesAndDetachesWithQuickLayoutBody() {
+        let parent = UIViewController()
+        parent.loadViewIfNeeded()
+        let child = RepresentableTestChildViewController(name: "A")
+        var events: [String] = []
+
+        let lazyRepresentable = LazyView {
+            let representable = QuickLayoutViewControllerRepresentable(child)
+            representable.eventHandler = { events.append($0.name) }
+            return representable
+        }
+
+        var showsChild = true
+        let containerView = QuickLayoutView {
+            VStack {
+                if showsChild {
+                    lazyRepresentable.frame(height: 120)
+                }
+            }
+        }
+        containerView.frame = CGRect(x: 0, y: 0, width: 240, height: 200)
+        parent.view.addSubview(containerView)
+
+        containerView.setNeedsQuickLayout()
+        containerView.quickLayoutIfNeeded()
+
+        #expect(child.parent === parent)
+        #expect(parent.children.contains { $0 === child })
+        #expect(events.contains("willAttach"))
+        #expect(events.contains("didAttach"))
+
+        showsChild = false
+        containerView.setNeedsQuickLayout()
+        containerView.quickLayoutIfNeeded()
+
+        #expect(child.parent == nil)
+        #expect(!parent.children.contains { $0 === child })
+        #expect(lazyRepresentable.isLoaded)
+        #expect(events.contains("willDetach"))
+        #expect(events.contains("didDetach"))
+    }
+
+    @Test func lazyRepresentableReusesLoadedHostAndCanReplaceChild() {
+        let parent = UIViewController()
+        parent.loadViewIfNeeded()
+        let firstChild = RepresentableTestChildViewController(name: "A")
+        let secondChild = RepresentableTestChildViewController(name: "B")
+        var loadCount = 0
+
+        let lazyRepresentable = LazyView {
+            loadCount += 1
+            return QuickLayoutViewControllerRepresentable(firstChild)
+        }
+
+        var showsChild = true
+        let containerView = QuickLayoutView {
+            VStack {
+                if showsChild {
+                    lazyRepresentable.frame(height: 120)
+                }
+            }
+        }
+        containerView.frame = CGRect(x: 0, y: 0, width: 240, height: 200)
+        parent.view.addSubview(containerView)
+        containerView.setNeedsQuickLayout()
+        containerView.quickLayoutIfNeeded()
+
+        showsChild = false
+        containerView.setNeedsQuickLayout()
+        containerView.quickLayoutIfNeeded()
+
+        showsChild = true
+        containerView.setNeedsQuickLayout()
+        containerView.quickLayoutIfNeeded()
+
+        #expect(loadCount == 1)
+        #expect(firstChild.parent === parent)
+
+        lazyRepresentable.ifLoaded?.setViewController(secondChild)
+
+        #expect(firstChild.parent == nil)
+        #expect(secondChild.parent === parent)
+    }
+
+    @Test func resettingLazyRepresentableCreatesANewHostOnNextLayout() {
+        let parent = UIViewController()
+        parent.loadViewIfNeeded()
+
+        var hostCreationCount = 0
+        func makeLazyRepresentable() -> LazyView<QuickLayoutViewControllerRepresentable> {
+            LazyView {
+                hostCreationCount += 1
+                return QuickLayoutViewControllerRepresentable(RepresentableTestChildViewController(name: "\(hostCreationCount)"))
+            }
+        }
+
+        var lazyRepresentable = makeLazyRepresentable()
+        var showsChild = true
+        let containerView = QuickLayoutView {
+            VStack {
+                if showsChild {
+                    lazyRepresentable.frame(height: 120)
+                }
+            }
+        }
+        containerView.frame = CGRect(x: 0, y: 0, width: 240, height: 200)
+        parent.view.addSubview(containerView)
+        containerView.setNeedsQuickLayout()
+        containerView.quickLayoutIfNeeded()
+
+        #expect(hostCreationCount == 1)
+        #expect(lazyRepresentable.isLoaded)
+        let firstHost = lazyRepresentable.ifLoaded!
+
+        firstHost.dismantleViewController()
+        showsChild = false
+        lazyRepresentable = makeLazyRepresentable()
+        containerView.setNeedsQuickLayout()
+        containerView.quickLayoutIfNeeded()
+
+        #expect(!lazyRepresentable.isLoaded)
+
+        showsChild = true
+        containerView.setNeedsQuickLayout()
+        containerView.quickLayoutIfNeeded()
+
+        #expect(hostCreationCount == 2)
+        #expect(lazyRepresentable.ifLoaded != nil)
+        #expect(lazyRepresentable.ifLoaded! !== firstHost)
+    }
+
+    @Test func parentlessRepresentableDoesNotAttachWithoutControllerOwnedHierarchy() {
+        let child = RepresentableTestChildViewController(name: "A")
+        var events: [String] = []
+        let representable = QuickLayoutViewControllerRepresentable(child)
+        representable.eventHandler = { events.append($0.name) }
+
+        let containerView = QuickLayoutView {
+            representable.frame(height: 120)
+        }
+        containerView.frame = CGRect(x: 0, y: 0, width: 240, height: 200)
+
+        containerView.setNeedsQuickLayout()
+        containerView.quickLayoutIfNeeded()
+
+        #expect(child.parent == nil)
+        #expect(events.contains("missingParent"))
+        #expect(!events.contains("didAttach"))
+    }
+
+    @Test func demoLocalizationResolvesCoreLanguages() {
+        DemoLocalization.setLocale(identifier: "en-US")
+        #expect(DemoLocalization.text("main.title") == "Examples")
+        #expect(DemoLocalization.text("demo.localizationOverview.title") == "Language Center")
+
+        DemoLocalization.setLocale(identifier: "zh-Hans")
+        #expect(DemoLocalization.text("main.title") == "示例")
+        #expect(DemoLocalization.text("language.follow.system") == "跟随系统")
+
+        DemoLocalization.setLocale(identifier: "ar")
+        #expect(DemoLocalization.text("main.title") == "الأمثلة")
+        #expect(DemoLocalization.currentLayoutDirection == .rightToLeft)
+
+        DemoLocalization.setLocale(identifier: "en-US")
+    }
+
+    @Test func localizationStringCatalogContainsSupportedLocales() throws {
+        let testFileURL = URL(fileURLWithPath: #filePath)
+        let catalogURL = testFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Demo")
+            .appendingPathComponent("Localizable.xcstrings")
+        let data = try Data(contentsOf: catalogURL)
+        let catalog = try JSONDecoder().decode(TestStringCatalog.self, from: data)
+
+        for key in ["main.title", "demo.localizationOverview.title", "demo.uikitLocalization.title", "demo.swiftUIBridge.title"] {
+            let localizations = try #require(catalog.strings[key]?.localizations)
+            #expect(localizations["en"]?.stringUnit.value.isEmpty == false)
+            #expect(localizations["zh-Hans"]?.stringUnit.value.isEmpty == false)
+            #expect(localizations["ar"]?.stringUnit.value.isEmpty == false)
+        }
+    }
+
+    @Test func infoPlistStringCatalogContainsDisplayName() throws {
+        let testFileURL = URL(fileURLWithPath: #filePath)
+        let catalogURL = testFileURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Demo")
+            .appendingPathComponent("InfoPlist.xcstrings")
+        let data = try Data(contentsOf: catalogURL)
+        let catalog = try JSONDecoder().decode(TestStringCatalog.self, from: data)
+        let localizations = try #require(catalog.strings["CFBundleDisplayName"]?.localizations)
+
+        #expect(localizations["en"]?.stringUnit.value == "QuickLayoutKit Demo")
+        #expect(localizations["zh-Hans"]?.stringUnit.value == "QuickLayoutKit 演示")
+        #expect(localizations["ar"]?.stringUnit.value.isEmpty == false)
+    }
+
+    @Test func mainMenuReloadsRouteTitlesAfterLanguageChange() {
+        DemoLocalization.setLocale(identifier: "zh-Hans")
+        let main = MainViewController()
+        main.loadViewIfNeeded()
+        main.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        main.view.setNeedsLayout()
+        main.view.layoutIfNeeded()
+
+        let buttonTitles = main.view.allSubviews(of: UIButton.self).compactMap { $0.configuration?.title ?? $0.title(for: .normal) }
+
+        #expect(buttonTitles.contains("语言中心"))
+        #expect(buttonTitles.contains("UIKit 本地化"))
+        #expect(buttonTitles.contains("SwiftUI 桥接"))
+
+        DemoLocalization.setLocale(identifier: "en-US")
+    }
+
+    @Test func mainMenuSectionHeadersFollowQuickLayoutDirection() throws {
+        DemoLocalization.setLocale(identifier: "ar")
+        let main = MainViewController()
+        main.loadViewIfNeeded()
+        main.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        main.reloadLayoutDirection(.rightToLeft)
+        main.view.setNeedsLayout()
+        main.view.layoutIfNeeded()
+
+        let quickLayoutHeader = try #require(
+            main.view.allSubviews(of: UILabel.self).first { $0.accessibilityIdentifier == "main.section.quicklayout" }
+        )
+
+        #expect(quickLayoutHeader.textAlignment == .natural)
+        #expect(quickLayoutHeader.semanticContentAttribute == .unspecified)
+        let rightToLeftFrame = quickLayoutHeader.convert(quickLayoutHeader.bounds, to: main.scrollView)
+        #expect(rightToLeftFrame.maxX > main.scrollView.bounds.width - 48)
+
+        DemoLocalization.setLocale(identifier: "zh-Hans")
+        main.reloadLocalizedContent()
+        main.reloadLayoutDirection(DemoLocalization.currentUIKitDirection)
+        main.view.setNeedsLayout()
+        main.view.layoutIfNeeded()
+
+        #expect(quickLayoutHeader.text == "QuickLayout 示例")
+        #expect(quickLayoutHeader.textAlignment == .natural)
+        #expect(quickLayoutHeader.semanticContentAttribute == .unspecified)
+        let leftToRightFrame = quickLayoutHeader.convert(quickLayoutHeader.bounds, to: main.scrollView)
+        #expect(leftToRightFrame.minX < 48)
+        #expect(leftToRightFrame.minX < rightToLeftFrame.minX)
+
+        DemoLocalization.setLocale(identifier: "en-US")
+    }
+
+    @Test func overviewPageReflectsArabicDirection() {
+        DemoLocalization.setLocale(identifier: "ar")
+        let viewController = LocalizationOverviewViewController()
+        viewController.loadViewIfNeeded()
+        viewController.view.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        viewController.reloadLocalizedContent()
+        viewController.reloadLayoutDirection(.rightToLeft)
+        viewController.view.setNeedsLayout()
+        viewController.view.layoutIfNeeded()
+
+        let labels = viewController.view.allSubviews(of: UILabel.self).compactMap(\.text)
+
+        #expect(labels.contains { $0.contains("RTL") })
+        #expect(viewController.view.semanticContentAttribute == .forceRightToLeft)
+
+        DemoLocalization.setLocale(identifier: "en-US")
+    }
+
+    @Test func uikitShowcaseAppliesCollectionDirection() throws {
+        DemoLocalization.setLocale(identifier: "ar")
+        let viewController = UIKitLocalizationShowcaseViewController()
+        viewController.loadViewIfNeeded()
+        viewController.reloadLayoutDirection(.rightToLeft)
+
+        let collectionView = try #require(viewController.view.allSubviews(of: UICollectionView.self).first)
+
+        #expect(collectionView.semanticContentAttribute == .forceRightToLeft)
+
+        DemoLocalization.setLocale(identifier: "en-US")
+    }
+
+    @Test func semanticGestureUsesDirectionalLayout() {
+        DemoLocalization.setLocale(identifier: "ar")
+
+        let physicalRight = DirectionalLayout.semanticHorizontalDirection(
+            translationX: 20,
+            layoutDirection: DemoLocalization.currentLayoutDirection
+        )
+        let isBackSwipe = DirectionalLayout.isBackSwipe(
+            translationX: -20,
+            layoutDirection: DemoLocalization.currentLayoutDirection
+        )
+
+        #expect(physicalRight == .leading)
+        #expect(isBackSwipe)
+
+        DemoLocalization.setLocale(identifier: "en-US")
+    }
+}
+
+private struct TestStringCatalog: Decodable {
+    let strings: [String: TestStringCatalogEntry]
+}
+
+private struct TestStringCatalogEntry: Decodable {
+    let localizations: [String: TestStringLocalization]?
+}
+
+private struct TestStringLocalization: Decodable {
+    let stringUnit: TestStringUnit
+}
+
+private struct TestStringUnit: Decodable {
+    let value: String
+}
+
+private extension UIView {
+    func allSubviews<T: UIView>(of type: T.Type) -> [T] {
+        subviews.flatMap { subview -> [T] in
+            var matches: [T] = []
+            if let typed = subview as? T {
+                matches.append(typed)
+            }
+            matches.append(contentsOf: subview.allSubviews(of: type))
+            return matches
+        }
+    }
+}
+
+private final class RepresentableTestChildViewController: UIViewController {
+
+    let name: String
+
+    init(name: String) {
+        self.name = name
+        super.init(nibName: nil, bundle: nil)
+        preferredContentSize = CGSize(width: 180, height: 96)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func loadView() {
+        let view = UIView()
+        view.backgroundColor = .secondarySystemBackground
+        self.view = view
     }
 }

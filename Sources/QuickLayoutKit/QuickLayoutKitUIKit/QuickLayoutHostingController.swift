@@ -6,7 +6,7 @@ import QuickLayout
 /// Subclass `QuickLayoutHostingController` and override ``body`` to provide the
 /// QuickLayout hierarchy for the controller's root view, or create an instance
 /// with ``init(content:)`` to provide content inline.
-open class QuickLayoutHostingController: UIViewController, QuickLayoutLayoutUpdating {
+open class QuickLayoutHostingController: UIViewController, QuickLayoutUpdating {
 
     // MARK: - Properties
 
@@ -63,12 +63,12 @@ open class QuickLayoutHostingController: UIViewController, QuickLayoutLayoutUpda
     /// Invalidates the hosted layout.
     ///
     /// Call this method after changing state that affects ``body``.
-    open func setNeedsLayoutUpdate() {
+    open func setNeedsQuickLayout() {
         containerView.setNeedsLayout()
     }
 
     /// Lays out the hosted content immediately if needed.
-    open func layoutIfNeeded() {
+    open func quickLayoutIfNeeded() {
         containerView.layoutIfNeeded()
     }
 

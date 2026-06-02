@@ -9,7 +9,9 @@ import UIKit
 import QuickLayout
 import QuickLayoutKit
 
-class ProfileViewController: QuickLayoutHostingController {
+class ProfileViewController: DemoQuickLayoutHostingController {
+
+    override var localizedTitleKey: String? { "demo.profile.title" }
 
     let avatarImageView = UIImageView()
     let nameLabel = UILabel()
@@ -30,12 +32,16 @@ class ProfileViewController: QuickLayoutHostingController {
         borderView.layer.borderColor = UIColor.systemRed.cgColor
         borderView.layer.borderWidth = 4
 
-        nameLabel.text = "John Doe"
         nameLabel.font = .systemFont(ofSize: 24, weight: .bold)
 
-        bioLabel.text = "iOS Developer"
         bioLabel.textColor = .secondaryLabel
         bioLabel.numberOfLines = 0
+    }
+
+    override func reloadLocalizedContent() {
+        super.reloadLocalizedContent()
+        nameLabel.text = DemoLocalization.text("profile.name")
+        bioLabel.text = DemoLocalization.text("profile.bio")
     }
 
     override var body: Layout {
