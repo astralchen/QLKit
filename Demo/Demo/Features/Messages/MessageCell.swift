@@ -9,14 +9,13 @@ import UIKit
 import QuickLayout
 import QuickLayoutKit
 
-@QuickLayout
-final class MessageCell: UICollectionViewCell {
+final class MessageCell: QuickLayoutCollectionViewCell {
 
     let avatarView = UIImageView()
     let titleLabel = UILabel()
     let messageLabel = UILabel()
 
-    var body: Layout {
+    override var body: Layout {
         HStack(alignment: .top, spacing: 8) {
 
             avatarView
@@ -35,6 +34,9 @@ final class MessageCell: UICollectionViewCell {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+
+        quickLayoutHorizontalFlexibility = .fixedSize
+        quickLayoutVerticalFlexibility = .fullyFlexible
 
         avatarView.backgroundColor = .systemPink.withAlphaComponent(0.2)
         avatarView.contentMode = .scaleAspectFill
@@ -55,35 +57,7 @@ final class MessageCell: UICollectionViewCell {
         messageLabel.text = model.message
         avatarView.image = UIImage(systemName: model.imageName)
         avatarView.tintColor = model.themeColor
-        setNeedsLayout()
-    }
-
-
-
-    /// sizeThatFits for QuickLayout macro body
-    /// - Pass constrained width with unconstrained height to let the layout
-    ///   compute the natural content height.
-    /// - Works well for self-sizing UICollectionViewCell.
-    /// Docs:
-    /// https://facebookincubator.github.io/QuickLayout/how-to-use/macro-layout-integration-isBodyEnabled/
-    /// https://facebookincubator.github.io/QuickLayout/how-to-use/macro-layout-integration-dos/
-    override func sizeThatFits(_ size: CGSize) -> CGSize {
-        // Constrain width; allow height to grow for natural measurement
-        let proposedSize = quickLayoutSizeLimit(proposed: size)
-        // Alternative: if macro body sizing is enabled, measure via body
-        // let measured = body.sizeThatFits(proposedSize)
-        // return measured
-        // Measure via QuickLayout; fallback to incoming size if unavailable
-        return _QuickLayoutViewImplementation.sizeThatFits(self, size: proposedSize) ?? size
-    }
-
-    override func quickLayoutFlexibility(for axis: Axis) -> Flexibility {
-        switch axis {
-        case .horizontal:
-            return .fixedSize
-        case .vertical:
-            return .fullyFlexible
-        }
+        setNeedsQuickLayout()
     }
 }
 

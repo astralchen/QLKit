@@ -9,12 +9,14 @@ import UIKit
 import QuickLayout
 import QuickLayoutKit
 
-class DynamicScrollViewController: QuickLayoutHostingController {
+class DynamicScrollViewController: DemoQuickLayoutHostingController {
+
+    override var localizedTitleKey: String? { "demo.dynamicScroll.title" }
 
 
     lazy var addButton:  UIButton =  {
         var config = UIButton.Configuration.filled()
-        config.title = "Add Item"
+        config.title = DemoLocalization.text("dynamic.addItem")
         config.cornerStyle = .capsule
         config.buttonSize = .medium
         
@@ -65,6 +67,11 @@ class DynamicScrollViewController: QuickLayoutHostingController {
         addItems(count: 10)
     }
 
+    override func reloadLocalizedContent() {
+        super.reloadLocalizedContent()
+        addButton.configuration?.title = DemoLocalization.text("dynamic.addItem")
+    }
+
 
 
     @objc private func addItemTapped() {
@@ -74,13 +81,13 @@ class DynamicScrollViewController: QuickLayoutHostingController {
 
         // ① Complete the layout first (without animation)
         UIView.performWithoutAnimation {
-            setNeedsLayoutUpdate()
-            layoutIfNeeded()
+            setNeedsQuickLayout()
+            quickLayoutIfNeeded()
         }
 
         newItem.animateAppear(offsetY: max(view.quickLayoutSafeAreaInsets.bottom, 12))
 
-        scrollView.scrollToEnd(animated: true)
+        scrollView.scrollTo(.bottom, animated: true)
     }
 
     private func addItems(count: Int) {

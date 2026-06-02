@@ -6,6 +6,7 @@
 //
 import UIKit
 import QuickLayout
+import QuickLayoutKit
 import Combine
 
 
@@ -15,14 +16,18 @@ class AnimatedKeyboardResponsiveView: UIView {
     let textField = UITextField()
     let submitButton = UIButton(type: .system)
 
-    let keyboardObserver = AnimatedKeyboardObserver()
+    let keyboardObserver = QuickLayoutKeyboardObserver()
 
-    private lazy var keyboardHeight: CGFloat = keyboardObserver.keyboardHeight {
+    private var keyboardContext = QuickLayoutKeyboardContext.hidden {
         didSet {
-            if oldValue != keyboardHeight { // 避免首次出现动画
+            if oldValue != keyboardContext { // 避免首次出现动画
                 animateLayoutChange()
             }
         }
+    }
+
+    private var keyboardHeight: CGFloat {
+        keyboardContext.height
     }
 
     private var cancellables : Set<AnyCancellable> = []
@@ -38,15 +43,19 @@ class AnimatedKeyboardResponsiveView: UIView {
     }
 
     private func setupViews() {
-        textField.placeholder = "输入文本"
         textField.borderStyle = .roundedRect
 
-
         var config = UIButton.Configuration.filled()
-        config.title = "提交"
         config.cornerStyle = .capsule     // ✅ 胶囊
         submitButton.configuration = config
         submitButton.addTarget(self, action: #selector(dismissKeyboard), for: .touchUpInside)
+        reloadLocalizedContent()
+    }
+
+    func reloadLocalizedContent() {
+        textField.placeholder = DemoLocalization.text("keyboard.placeholder")
+        submitButton.configuration?.title = DemoLocalization.text("common.submit")
+        setNeedsLayout()
     }
 
     @objc private func dismissKeyboard() {
@@ -54,10 +63,9 @@ class AnimatedKeyboardResponsiveView: UIView {
     }
 
     private func setupKeyboardObservers() {
-        keyboardObserver.$keyboardHeight
-            .sink { [weak self] keyboardHeight in
-
-                self?.keyboardHeight = keyboardHeight
+        keyboardObserver.$context
+            .sink { [weak self] context in
+                self?.keyboardContext = context
             }
             .store(in: &cancellables)
     }
@@ -65,9 +73,9 @@ class AnimatedKeyboardResponsiveView: UIView {
 
     private func animateLayoutChange() {
         UIView.animate(
-            withDuration: keyboardObserver.animationDuration,
+            withDuration: keyboardContext.animationDuration,
             delay: 0,
-            options: keyboardObserver.animationCurve,
+            options: keyboardContext.animationOptions,
             animations: {
                 self.setNeedsLayout()
                 self.layoutIfNeeded()
@@ -86,7 +94,7 @@ class AnimatedKeyboardResponsiveView: UIView {
                 .frame(height: 50)
         }
         .padding(.horizontal, 20)
-        .padding(.horizontal, safeAreaInsets.left)
+        .padding(.horizontal, quickLayoutSafeAreaInsets.maximumHorizontalInset)
         .padding(.bottom, max(keyboardHeight + 20, safeAreaInsets.bottom))
     }
 }

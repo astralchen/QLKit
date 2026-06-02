@@ -9,12 +9,14 @@ import UIKit
 import QuickLayout
 import QuickLayoutKit
 
-class CounterViewController: QuickLayoutHostingController {
+class CounterViewController: DemoQuickLayoutHostingController {
+
+    override var localizedTitleKey: String? { "demo.counter.title" }
 
     private var count = 0 {
         didSet {
             updateLabels()
-            setNeedsLayoutUpdate()
+            setNeedsQuickLayout()
         }
     }
 
@@ -28,13 +30,17 @@ class CounterViewController: QuickLayoutHostingController {
         counterLabel.font = .systemFont(ofSize: 48, weight: .bold)
         counterLabel.textAlignment = .center
 
-        incrementButton.setTitle("Increment", for: .normal)
         incrementButton.addTarget(self, action: #selector(increment), for: .touchUpInside)
 
-        decrementButton.setTitle("Decrement", for: .normal)
         decrementButton.addTarget(self, action: #selector(decrement), for: .touchUpInside)
 
         updateLabels()
+    }
+
+    override func reloadLocalizedContent() {
+        super.reloadLocalizedContent()
+        incrementButton.setTitle(DemoLocalization.text("counter.increment"), for: .normal)
+        decrementButton.setTitle(DemoLocalization.text("counter.decrement"), for: .normal)
     }
 
     override var body: Layout {

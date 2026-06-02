@@ -6,10 +6,13 @@
 //
 
 import UIKit
+import AppLocalization
 import QuickLayout
 import QuickLayoutKit
 
-class HorizontalScrollViewViewController: QuickLayoutHostingController {
+class HorizontalScrollViewViewController: DemoQuickLayoutHostingController {
+
+    override var localizedTitleKey: String? { "demo.horizontalScroll.title" }
 
     let scrollView = QuickLayoutScrollView()
 
@@ -48,6 +51,26 @@ class HorizontalScrollViewViewController: QuickLayoutHostingController {
         super.viewDidLoad()
         scrollView.contentInsetAdjustmentBehavior = .never
         scrollView.backgroundColor = .systemGray6
+    }
+
+    override func viewWillAppear(_ animated: Bool) {
+        super.viewWillAppear(animated)
+        prepareInitialScrollPosition()
+    }
+
+    override func reloadLayoutDirection(_ direction: UIUserInterfaceLayoutDirection) {
+        super.reloadLayoutDirection(direction)
+        scrollView.semanticContentAttribute = direction.appLayoutDirection.semanticContentAttribute
+        scrollView.scrollToBeginning(animated: false)
+    }
+
+    private func prepareInitialScrollPosition() {
+        UIView.performWithoutAnimation {
+            view.setNeedsLayout()
+            view.layoutIfNeeded()
+            scrollView.scrollToBeginning(animated: false)
+            scrollView.layoutIfNeeded()
+        }
     }
 
 }
