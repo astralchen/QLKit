@@ -7,9 +7,9 @@
 
 import UIKit
 import QuickLayout
-import QLKit
+import QuickLayoutKit
 
-class KeyboardHandlingViewController: QLHostingController {
+class KeyboardHandlingViewController: QuickLayoutHostingController {
 
     override var body: any Layout {
         ZStack {

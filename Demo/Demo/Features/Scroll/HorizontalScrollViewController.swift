@@ -7,11 +7,11 @@
 
 import UIKit
 import QuickLayout
-import QLKit
+import QuickLayoutKit
 
-class HorizontalScrollViewViewController: QLHostingController {
+class HorizontalScrollViewViewController: QuickLayoutHostingController {
 
-    let scrollView = QLScrollView()
+    let scrollView = QuickLayoutScrollView()
 
     let views: [UIView] =  {
 
@@ -37,7 +37,7 @@ class HorizontalScrollViewViewController: QLHostingController {
                 }
             }
             .padding(16)
-            .padding(view.safeAreaEdgeInsets)
+            .padding(view.quickLayoutSafeAreaInsets)
 
         }
 

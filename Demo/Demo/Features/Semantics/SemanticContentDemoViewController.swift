@@ -6,7 +6,7 @@
 //
 
 import UIKit
-import QLKit
+import QuickLayoutKit
 import QuickLayout
 /*
 UIKit semanticContentAttribute 行为整理（实战版）
@@ -39,9 +39,9 @@ UIKit semanticContentAttribute 行为整理（实战版）
 */
 
 // MARK: - Main Demo Controller
-class SemanticContentDemoViewController: QLHostingController {
+class SemanticContentDemoViewController: QuickLayoutHostingController {
 
-    let scrollView = QLScrollView()
+    let scrollView = QuickLayoutScrollView()
     let titleLabel = UILabel()
     let descLabel = UILabel()
 

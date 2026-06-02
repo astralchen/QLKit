@@ -7,9 +7,9 @@
 
 import UIKit
 import QuickLayout
-import QLKit
+import QuickLayoutKit
 
-class CounterViewController: QLHostingController {
+class CounterViewController: QuickLayoutHostingController {
 
     private var count = 0 {
         didSet {

@@ -7,9 +7,9 @@
 
 import UIKit
 import QuickLayout
-import QLKit
+import QuickLayoutKit
 
-class MainViewController: QLHostingController {
+class MainViewController: QuickLayoutHostingController {
     
     let viewControllerTypes: [UIViewController.Type] = [
         HorizontalScrollViewViewController.self,
@@ -24,7 +24,7 @@ class MainViewController: QLHostingController {
     ]
     
     var buttons: [UIButton] = []
-    let scrollView = QLScrollView()
+    let scrollView = QuickLayoutScrollView()
 
     override var body: Layout {
         ScrollView(scrollView) {
@@ -36,7 +36,7 @@ class MainViewController: QLHostingController {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.horizontal, view.safeAreaEdgeInsets.leading)
+            .padding(.horizontal, view.quickLayoutSafeAreaInsets.leading)
         }
     }
     

@@ -7,9 +7,9 @@
 
 import UIKit
 import QuickLayout
-import QLKit
+import QuickLayoutKit
 
-class DashboardViewController: QLHostingController {
+class DashboardViewController: QuickLayoutHostingController {
 
     let profileImageView = UIImageView()
     let nameLabel = UILabel()
@@ -78,7 +78,7 @@ class DashboardViewController: QLHostingController {
             Spacer()
         }
         .padding(.all, 16)
-        .padding(.horizontal, view.safeAreaEdgeInsets.leading)
+        .padding(.horizontal, view.quickLayoutSafeAreaInsets.leading)
         .padding(.top, view.safeAreaInsets.top)
     }
 

@@ -7,9 +7,9 @@
 
 import UIKit
 import QuickLayout
-import QLKit
+import QuickLayoutKit
 
-class ProfileViewController: QLHostingController {
+class ProfileViewController: QuickLayoutHostingController {
 
     let avatarImageView = UIImageView()
     let nameLabel = UILabel()

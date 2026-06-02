@@ -7,7 +7,7 @@
 
 import UIKit
 import QuickLayout
-import QLKit
+import QuickLayoutKit
 
 @QuickLayout
 final class MessageCell: UICollectionViewCell {
@@ -69,7 +69,7 @@ final class MessageCell: UICollectionViewCell {
     /// https://facebookincubator.github.io/QuickLayout/how-to-use/macro-layout-integration-dos/
     override func sizeThatFits(_ size: CGSize) -> CGSize {
         // Constrain width; allow height to grow for natural measurement
-        let proposedSize = layoutLimit(proposed: size)
+        let proposedSize = quickLayoutSizeLimit(proposed: size)
         // Alternative: if macro body sizing is enabled, measure via body
         // let measured = body.sizeThatFits(proposedSize)
         // return measured
@@ -77,7 +77,7 @@ final class MessageCell: UICollectionViewCell {
         return _QuickLayoutViewImplementation.sizeThatFits(self, size: proposedSize) ?? size
     }
 
-    override func flexibility(for axis: Axis) -> Flexibility {
+    override func quickLayoutFlexibility(for axis: Axis) -> Flexibility {
         switch axis {
         case .horizontal:
             return .fixedSize
@@ -106,8 +106,8 @@ func makeMessageCell(with model: MessageModel) -> MessageCell {
     return cell
 }
 
-private func previewCell(_ model: MessageModel) -> QLComposableHostingController {
-    previewHostingController {
+private func previewCell(_ model: MessageModel) -> QuickLayoutHostingController {
+    QuickLayoutHostingController {
         makeMessageCell(with: model)
             .padding(16)
     }

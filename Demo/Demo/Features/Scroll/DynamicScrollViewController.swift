@@ -7,9 +7,9 @@
 
 import UIKit
 import QuickLayout
-import QLKit
+import QuickLayoutKit
 
-class DynamicScrollViewController: QLHostingController {
+class DynamicScrollViewController: QuickLayoutHostingController {
 
 
     lazy var addButton:  UIButton =  {
@@ -26,7 +26,7 @@ class DynamicScrollViewController: QLHostingController {
 
     private var items: [UIView] = []
 
-    let scrollView: QLScrollView = QLScrollView()
+    let scrollView: QuickLayoutScrollView = QuickLayoutScrollView()
 
 //    📌 最终工程级规范
 //    ① 顺序固定：上左下右
@@ -41,17 +41,17 @@ class DynamicScrollViewController: QLHostingController {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.horizontal, view.safeAreaEdgeInsets.horizontal)
+            .padding(.horizontal, view.quickLayoutSafeAreaInsets.maximumHorizontalInset)
             .padding(.bottom, 8)
-            .padding(.bottom, view.safeAreaEdgeInsets.bottom)
+            .padding(.bottom, view.quickLayoutSafeAreaInsets.bottom)
 
         }
         .overlay(alignment: .topTrailing) {
             addButton
                 .padding(.top, 8)
-                .padding(.top, view.safeAreaEdgeInsets.top)
+                .padding(.top, view.quickLayoutSafeAreaInsets.top)
                 .padding(.trailing, 16)
-                .padding(.trailing, view.safeAreaEdgeInsets.trailing)
+                .padding(.trailing, view.quickLayoutSafeAreaInsets.trailing)
 
         }
 
@@ -78,9 +78,9 @@ class DynamicScrollViewController: QLHostingController {
             layoutIfNeeded()
         }
 
-        newItem.animateAppear(offsetY: max(view.safeAreaEdgeInsets.bottom, 12))
+        newItem.animateAppear(offsetY: max(view.quickLayoutSafeAreaInsets.bottom, 12))
 
-        scrollView.scrollToBottom(animated: true)
+        scrollView.scrollToEnd(animated: true)
     }
 
     private func addItems(count: Int) {

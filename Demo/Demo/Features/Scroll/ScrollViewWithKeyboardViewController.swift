@@ -7,7 +7,7 @@
 
 import UIKit
 import QuickLayout
-import QLKit
+import QuickLayoutKit
 import Combine
 
 // MARK: - Header View
@@ -131,9 +131,9 @@ class NotesFieldView: UIView {
 
 // MARK: - Main ViewController
 
-class ScrollViewWithKeyboardViewController: QLHostingController {
+class ScrollViewWithKeyboardViewController: QuickLayoutHostingController {
 
-    let scrollView = QLScrollView()
+    let scrollView = QuickLayoutScrollView()
     let keyboardObserver = AnimatedKeyboardObserver()
 
     // UI Components

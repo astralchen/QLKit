@@ -1,25 +1,26 @@
-# QLKit
+# QuickLayoutKit
 
-**QLKit** brings the declarative power and developer experience of SwiftUI to UIKit. Built on top of [QuickLayout](https://github.com/facebookincubator/QuickLayout), it allows you to build complex UI layouts using a syntax you already love, while keeping the full power and flexibility of UIKit components.
+QuickLayoutKit is a UIKit support package for
+[QuickLayout](https://github.com/facebookincubator/QuickLayout). It provides a
+small set of UIKit-focused building blocks so view controllers, scroll views,
+safe-area spacing, and self-sizing cells can be written with QuickLayout's
+declarative layout syntax.
 
-## Features
+The package exports three modules:
 
-- 🏗 **Declarative Syntax**: Write UIKit layouts using `VStack`, `HStack`, `ZStack` and more, just like SwiftUI.
-- 🔌 **Seamless UIKit Integration**: Use standard `UIView`, `UILabel`, `UIButton` directly in your declarative stacks.
-- 📜 **Easy Scrolling**: `QLScrollView` makes creating scrollable content trivial.
-- 🚀 **Hosting Controllers**: `QLHostingController` and `QLComposableHostingController` bridge the gap between declarative layouts and view controller lifecycles.
-- 🧩 **Component-Oriented**: Encourage breaking down UI into smaller, reusable components.
+- `QuickLayoutKit` re-exports the public core and UIKit helpers.
+- `QuickLayoutKitCore` contains shared QuickLayout extensions.
+- `QuickLayoutKitUIKit` contains UIKit integration types.
 
 ## Requirements
 
-- iOS 15.0+
-- Swift 5.5+
+- iOS 15.0 or later
+- Swift 6.2 or later
+- QuickLayout from `facebookincubator/QuickLayout`
 
 ## Installation
 
-### Swift Package Manager
-
-Add `QLKit` to your `Package.swift` dependencies:
+Add this repository to your Swift package dependencies:
 
 ```swift
 dependencies: [
@@ -27,114 +28,215 @@ dependencies: [
 ]
 ```
 
-## Usage
+Then add the `QuickLayoutKit` product to your app target:
 
-### 1. Basic Hosting Controller
+```swift
+.target(
+    name: "App",
+    dependencies: [
+        "QuickLayoutKit"
+    ]
+)
+```
 
-Subclass `QLHostingController` to define your UI declaratively.
+Import both QuickLayout and QuickLayoutKit where you declare layouts:
+
+```swift
+import QuickLayout
+import QuickLayoutKit
+```
+
+## Core APIs
+
+### `QuickLayoutHostingController`
+
+`QuickLayoutHostingController` is a `UIViewController` subclass whose root view
+is driven by a QuickLayout `body`.
+
+Use subclassing when the screen owns state, targets, delegates, or lifecycle
+work:
 
 ```swift
 import UIKit
-import QLKit
 import QuickLayout
+import QuickLayoutKit
 
-class MyViewController: QLHostingController {
+final class CounterViewController: QuickLayoutHostingController {
 
-    let titleLabel = UILabel()
-    let subtitleLabel = UILabel()
+    private var count = 0 {
+        didSet {
+            counterLabel.text = "\(count)"
+            setNeedsLayoutUpdate()
+        }
+    }
+
+    private let counterLabel = UILabel()
+    private let incrementButton = UIButton(type: .system)
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        titleLabel.text = "Hello QLKit"
-        titleLabel.font = .boldSystemFont(ofSize: 24)
-        
-        subtitleLabel.text = "SwiftUI-like syntax for UIKit"
-        subtitleLabel.textColor = .gray
+
+        counterLabel.font = .systemFont(ofSize: 48, weight: .bold)
+        counterLabel.textAlignment = .center
+        counterLabel.text = "\(count)"
+
+        incrementButton.setTitle("Increment", for: .normal)
+        incrementButton.addTarget(self, action: #selector(increment), for: .touchUpInside)
     }
 
-    // Define layout declaratively
     override var body: Layout {
-        VStack(alignment: .center, spacing: 10) {
-            titleLabel
-            subtitleLabel
+        VStack(alignment: .center, spacing: 24) {
+            Spacer()
+            counterLabel
+            incrementButton
+            Spacer()
         }
-        .padding(.all, 20)
+        .padding(.all, 24)
+    }
+
+    @objc private func increment() {
+        count += 1
     }
 }
 ```
 
-### 2. Composable Hosting Controller
-
-For simple screens, avoid subclassing by using `QLComposableHostingController`.
+Use the closure initializer for small hosted layouts:
 
 ```swift
 let titleLabel = UILabel()
 titleLabel.text = "Quick Setup"
 
-let vc = QLComposableHostingController {
-    VStack {
+let viewController = QuickLayoutHostingController {
+    VStack(spacing: 12) {
         titleLabel
     }
-    .center()
+    .padding(.all, 24)
 }
-.withTitle("Home")
-.withBackgroundColor(.white)
 ```
 
-### 3. Scroll Views
+Call `setNeedsLayoutUpdate()` after mutating state that changes `body`.
 
-`ScrollView` automatically manages content size and layout for you.
+### `QuickLayoutScrollView`
+
+`QuickLayoutScrollView` is a `UIScrollView` that measures QuickLayout content
+and keeps its `contentSize` in sync during layout.
 
 ```swift
-class MyViewController: QLHostingController {
+final class DynamicScrollViewController: QuickLayoutHostingController {
 
-    let scrollView = QLScrollView()
-    
+    private let scrollView = QuickLayoutScrollView()
+    private var rows: [UIView] = []
+
     override var body: Layout {
-        // Add content declaratively
-        ScrollView(scrollView) {
-            headerView
-            contentLabel
-            footerView
+        ScrollView(scrollView, axis: .vertical) {
+            VStack(spacing: 12) {
+                ForEach(rows) { row in
+                    row.frame(height: 80)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, view.quickLayoutSafeAreaInsets.bottom)
         }
     }
 }
 ```
 
-### 4. Complex Layout Example
+The scroll view also supports direct construction:
 
-Combine horizontal and vertical stacks to create complex dashboards.
+```swift
+let scrollView = QuickLayoutScrollView.vertical {
+    headerView
+    contentView
+    footerView
+}
+```
+
+For horizontal content, pass `axis: .horizontal` to `ScrollView` or use
+`QuickLayoutScrollView.horizontal`.
+
+### Safe-area helpers
+
+`UIView.quickLayoutSafeAreaInsets` converts UIKit safe-area insets to
+`QuickLayout.EdgeInsets` and respects the view's effective layout direction.
+The core module also exposes convenience values for symmetric safe-area
+padding:
 
 ```swift
 override var body: Layout {
-    VStack(spacing: 24) {
-        // Header
-        HStack(spacing: 12) {
-            imageView
-                .resizable()
-                .frame(width: 50, height: 50)
-            
-            VStack(alignment: .leading) {
-                nameLabel
-                statusLabel
-            }
-            Spacer()
-        }
-        .padding(.all, 16)
-        .background {
-             // Return a UIView for background
-             let bg = UIView()
-             bg.backgroundColor = .secondarySystemBackground
-             bg.layer.cornerRadius = 12
-             return bg
-        }
+    contentView
+        .padding(.horizontal, view.quickLayoutSafeAreaInsets.maximumHorizontalInset)
+        .padding(.bottom, view.quickLayoutSafeAreaInsets.maximumVerticalInset)
+}
+```
 
-        // Content
-        Spacer()
+Read safe-area values after the view has been laid out. In a hosting
+controller body, they are commonly used as part of the layout pass.
+
+### Collection view sizing helpers
+
+`UICollectionViewCell.quickLayoutFlexibility(for:)` and
+`quickLayoutSizeLimit(proposed:)` help self-sizing cells describe which axes are
+fixed by the collection view layout and which axes should be measured by
+QuickLayout.
+
+```swift
+@QuickLayout
+final class MessageCell: UICollectionViewCell {
+
+    private let titleLabel = UILabel()
+    private let messageLabel = UILabel()
+
+    var body: Layout {
+        VStack(alignment: .leading, spacing: 4) {
+            titleLabel
+            messageLabel
+        }
+        .padding(.all, 12)
+    }
+
+    override func sizeThatFits(_ size: CGSize) -> CGSize {
+        let proposedSize = quickLayoutSizeLimit(proposed: size)
+        return _QuickLayoutViewImplementation.sizeThatFits(self, size: proposedSize) ?? size
+    }
+
+    override func quickLayoutFlexibility(for axis: Axis) -> Flexibility {
+        switch axis {
+        case .horizontal:
+            return .fixedSize
+        case .vertical:
+            return .fullyFlexible
+        }
     }
 }
 ```
 
+## Demo App
+
+The `Demo` project contains examples for:
+
+- Basic hosted screens
+- Counters and state-driven relayout
+- Vertical and horizontal scrolling
+- Safe-area padding
+- Dynamic content insertion
+- Keyboard-aware scrolling
+- Self-sizing collection view cells
+- UIKit semantic content direction behavior
+
+Open `Demo/Demo.xcodeproj` in Xcode and run the `Demo` scheme to explore the
+examples.
+
+## Testing
+
+QuickLayoutKit is a UIKit package, so validate it with an iOS Simulator
+destination from Xcode or `xcodebuild`:
+
+```sh
+xcodebuild -project Demo/Demo.xcodeproj -scheme Demo -destination 'platform=iOS Simulator,name=iPhone 16' test
+```
+
+Run the demo app from Xcode when validating UIKit layout behavior visually.
+
 ## License
 
-QLKit is released under the MIT License. See [LICENSE](LICENSE) for details.
+QuickLayoutKit is available under the MIT license. See `LICENSE` for details.
