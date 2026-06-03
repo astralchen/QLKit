@@ -60,6 +60,7 @@ class HorizontalScrollViewViewController: DemoQuickLayoutHostingController {
 
     override func reloadLayoutDirection(_ direction: UIUserInterfaceLayoutDirection) {
         super.reloadLayoutDirection(direction)
+        scrollView.quickLayoutDirectionOverride = direction == .rightToLeft ? .rightToLeft : .leftToRight
         scrollView.semanticContentAttribute = direction.appLayoutDirection.semanticContentAttribute
         scrollView.scrollToBeginning(animated: false)
     }

@@ -51,14 +51,37 @@ enum DemoLocalization {
             }
 
             Task { @MainActor in
+                let rootViewControllers = visibleRootViewControllers()
                 sceneCoordinator.reloadAllScenes(
                     for: change,
-                    rebuildRootWindows: change.layoutDirectionChanged,
+                    rebuildRootWindows: shouldRebuildRootWindows(
+                        for: change,
+                        rootViewControllers: rootViewControllers
+                    ),
                     animateRootRebuild: true,
                     updateAppearanceProxies: false
                 )
             }
         }
+    }
+
+    static func shouldRebuildRootWindows(
+        for change: LocalizationChange,
+        rootViewControllers: [UIViewController]
+    ) -> Bool {
+        shouldRebuildRootWindows(
+            for: change,
+            hasPresentedViewController: rootViewControllers.contains {
+                containsPresentedViewController(in: $0)
+            }
+        )
+    }
+
+    static func shouldRebuildRootWindows(
+        for change: LocalizationChange,
+        hasPresentedViewController: Bool
+    ) -> Bool {
+        change.layoutDirectionChanged && !hasPresentedViewController
     }
 
     @discardableResult
@@ -138,6 +161,32 @@ enum DemoLocalization {
             image: UIImage(systemName: "globe"),
             children: [follow] + localeActions
         )
+    }
+
+    private static func visibleRootViewControllers() -> [UIViewController] {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .filter { !$0.isHidden }
+            .compactMap(\.rootViewController)
+    }
+
+    private static func containsPresentedViewController(in viewController: UIViewController) -> Bool {
+        if viewController.presentedViewController != nil {
+            return true
+        }
+
+        if let navigationController = viewController as? UINavigationController,
+           navigationController.viewControllers.contains(where: containsPresentedViewController(in:)) {
+            return true
+        }
+
+        if let tabBarController = viewController as? UITabBarController,
+           tabBarController.viewControllers?.contains(where: containsPresentedViewController(in:)) == true {
+            return true
+        }
+
+        return viewController.children.contains(where: containsPresentedViewController(in:))
     }
 }
 

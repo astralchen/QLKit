@@ -22,6 +22,7 @@ final class ViewControllerRepresentableDemoViewController: DemoQuickLayoutHostin
     private lazy var hideHostButton = makeButton(titleKey: "representable.hide", action: #selector(hideHost))
     private lazy var showAgainButton = makeButton(titleKey: "representable.showAgain", action: #selector(showAgain))
     private lazy var replaceButton = makeButton(titleKey: "representable.replace", action: #selector(replaceLoadedChild))
+    private lazy var preferredSizeButton = makeButton(titleKey: "representable.preferredSize", action: #selector(togglePreferredContentSize))
     private lazy var resetButton = makeButton(titleKey: "representable.reset", action: #selector(resetLazyView))
 
     private var showsChild = false
@@ -58,6 +59,7 @@ final class ViewControllerRepresentableDemoViewController: DemoQuickLayoutHostin
         hideHostButton.configuration?.title = DemoLocalization.text("representable.hide")
         showAgainButton.configuration?.title = DemoLocalization.text("representable.showAgain")
         replaceButton.configuration?.title = DemoLocalization.text("representable.replace")
+        preferredSizeButton.configuration?.title = DemoLocalization.text("representable.preferredSize")
         resetButton.configuration?.title = DemoLocalization.text("representable.reset")
         (lazyChild.ifLoaded?.viewController as? LoggingChildViewController)?.reloadLocalizedContent()
         refreshStateLabel()
@@ -73,6 +75,7 @@ final class ViewControllerRepresentableDemoViewController: DemoQuickLayoutHostin
                     hideHostButton.resizable().frame(height: 44)
                     showAgainButton.resizable().frame(height: 44)
                     replaceButton.resizable().frame(height: 44)
+                    preferredSizeButton.resizable().frame(height: 44)
                     resetButton.resizable().frame(height: 44)
                 }
 
@@ -144,6 +147,22 @@ private extension ViewControllerRepresentableDemoViewController {
         appendLazyStateLog()
     }
 
+    @objc func togglePreferredContentSize() {
+        appendLog("Action: Toggle preferredContentSize")
+
+        guard let host = lazyChild.ifLoaded,
+              let child = host.viewController as? LoggingChildViewController else {
+            appendLog("Preferred size skipped: LazyView ifLoaded=nil")
+            appendLazyStateLog()
+            return
+        }
+
+        child.togglePreferredContentSize()
+        host.invalidateChildLayout()
+        refreshLayout()
+        appendLazyStateLog()
+    }
+
     func refreshLayout() {
         refreshStateLabel()
         setNeedsQuickLayout()
@@ -159,6 +178,9 @@ private extension ViewControllerRepresentableDemoViewController {
             let host = QuickLayoutViewControllerRepresentable(child)
             host.eventHandler = { [weak self] event in
                 self?.appendLog("Representable event: \(event.name)")
+            }
+            host.detailedEventHandler = { [weak self] event in
+                self?.appendLog("Representable detailed: \(Self.describeDetailedEvent(event))")
             }
 
             return host
@@ -197,7 +219,7 @@ private extension ViewControllerRepresentableDemoViewController {
         let hostText = loadedHost.map { String(describing: type(of: $0)) } ?? "nil"
         let childText = loadedHost?.viewController.map { viewController in
             if let child = viewController as? LoggingChildViewController {
-                return "\(String(describing: type(of: child)))(name: \(child.name))"
+                return "\(String(describing: type(of: child)))(name: \(child.name), preferred: \(Self.describe(child.preferredContentSize)))"
             }
             return String(describing: type(of: viewController))
         } ?? "nil"
@@ -226,6 +248,29 @@ private extension ViewControllerRepresentableDemoViewController {
         formatter.dateFormat = "HH:mm:ss.SSS"
         return formatter.string(from: date)
     }
+
+    static func describeDetailedEvent(_ event: QuickLayoutViewControllerRepresentable.DetailedEvent) -> String {
+        [
+            "kind=\(event.kind.name)",
+            "parent=\(describe(event.parent))",
+            "child=\(describe(event.viewController))",
+            "old=\(describe(event.oldViewController))",
+            "new=\(describe(event.newViewController))",
+            "reason=\(event.reason ?? "nil")"
+        ].joined(separator: ", ")
+    }
+
+    static func describe(_ viewController: UIViewController?) -> String {
+        guard let viewController else { return "nil" }
+        if let child = viewController as? LoggingChildViewController {
+            return "\(String(describing: type(of: child)))(\(child.name))"
+        }
+        return String(describing: type(of: viewController))
+    }
+
+    static func describe(_ size: CGSize) -> String {
+        "\(Int(size.width))x\(Int(size.height))"
+    }
 }
 
 private final class LoggingChildViewController: UIViewController, LocalizedContentUpdating, UserInterfaceLayoutDirectionUpdating {
@@ -236,6 +281,7 @@ private final class LoggingChildViewController: UIViewController, LocalizedConte
     private let titleLabel = UILabel()
     private let subtitleLabel = UILabel()
     private let actionButton = UIButton(type: .system)
+    private var usesExpandedPreferredSize = false
 
     init(name: String, logHandler: @escaping (String) -> Void) {
         self.name = name
@@ -298,6 +344,13 @@ private final class LoggingChildViewController: UIViewController, LocalizedConte
 
     func reloadLayoutDirection(_ direction: UIUserInterfaceLayoutDirection) {
         viewIfLoaded?.semanticContentAttribute = direction.appLayoutDirection.semanticContentAttribute
+        viewIfLoaded?.setNeedsLayout()
+    }
+
+    func togglePreferredContentSize() {
+        usesExpandedPreferredSize.toggle()
+        preferredContentSize = CGSize(width: 320, height: usesExpandedPreferredSize ? 320 : 220)
+        log("preferredContentSize changed to \(Int(preferredContentSize.width))x\(Int(preferredContentSize.height))")
         viewIfLoaded?.setNeedsLayout()
     }
 

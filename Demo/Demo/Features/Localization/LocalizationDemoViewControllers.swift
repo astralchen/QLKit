@@ -75,6 +75,9 @@ final class LocalizationOverviewViewController: DemoQuickLayoutHostingController
         configuration.cornerStyle = .medium
         configuration.baseBackgroundColor = .systemBlue.withAlphaComponent(0.1)
         configuration.baseForegroundColor = .systemBlue
+        configuration.titleAlignment = .leading
+        configuration.imagePlacement = .trailing
+        configuration.imagePadding = 8
 
         let button = UIButton(configuration: configuration)
         button.accessibilityIdentifier = identifier
@@ -90,21 +93,29 @@ final class LocalizationOverviewViewController: DemoQuickLayoutHostingController
 
     private func updateLanguageButton(_ button: UIButton) {
         guard let identifier = button.accessibilityIdentifier else { return }
+        button.semanticContentAttribute = .unspecified
+        button.contentHorizontalAlignment = .leading
+
+        var configuration = button.configuration ?? UIButton.Configuration.filled()
+        configuration.titleAlignment = .leading
+        configuration.imagePlacement = .trailing
+        configuration.imagePadding = 8
 
         if identifier == LocalizationController.followSystemLocaleIdentifier {
-            button.configuration?.title = DemoLocalization.text("language.follow.system")
-            button.configuration?.subtitle = DemoLocalization.localeDisplayName(DemoLocalization.localizationController.currentLocale)
-            button.configuration?.image = DemoLocalization.localizationController.followsSystemLocale ? UIImage(systemName: "checkmark") : nil
+            configuration.title = DemoLocalization.text("language.follow.system")
+            configuration.subtitle = DemoLocalization.localeDisplayName(DemoLocalization.localizationController.currentLocale)
+            configuration.image = DemoLocalization.localizationController.followsSystemLocale ? UIImage(systemName: "checkmark") : nil
+            button.configuration = configuration
             return
         }
 
         guard let locale = DemoLocalization.localizationController.supportedLocales.first(where: { $0.identifier == identifier }) else {
             return
         }
-        button.configuration?.title = locale.nativeDisplayName
-        button.configuration?.subtitle = DemoLocalization.localeDisplayName(locale)
-        button.configuration?.image = (!DemoLocalization.localizationController.followsSystemLocale && locale == DemoLocalization.localizationController.currentLocale) ? UIImage(systemName: "checkmark") : nil
-        button.semanticContentAttribute = locale.layoutDirection.semanticContentAttribute
+        configuration.title = locale.nativeDisplayName
+        configuration.subtitle = DemoLocalization.localeDisplayName(locale)
+        configuration.image = (!DemoLocalization.localizationController.followsSystemLocale && locale == DemoLocalization.localizationController.currentLocale) ? UIImage(systemName: "checkmark") : nil
+        button.configuration = configuration
     }
 }
 
@@ -205,8 +216,13 @@ private final class LocalizationShowcaseCell: UICollectionViewCell {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
-        contentView.backgroundColor = .secondarySystemGroupedBackground
-        contentView.layer.cornerRadius = 8
+        var backgroundConfiguration = UIBackgroundConfiguration.clear()
+        backgroundConfiguration.backgroundColor = .secondarySystemFill
+        backgroundConfiguration.cornerRadius = 8
+        backgroundConfiguration.strokeColor = .separator.withAlphaComponent(0.2)
+        backgroundConfiguration.strokeWidth = 1 / UIScreen.main.scale
+        self.backgroundConfiguration = backgroundConfiguration
+
         label.font = .preferredFont(forTextStyle: .callout)
         label.textAlignment = .center
         label.numberOfLines = 2
@@ -460,4 +476,9 @@ final class LocalizationBoundaryDemoViewController: DemoViewController {
         alert.addAction(UIAlertAction(title: DemoLocalization.text("common.ok"), style: .default))
         present(alert, animated: true)
     }
+}
+
+
+#Preview {
+    UINavigationController(rootViewController: LocalizationOverviewViewController())
 }

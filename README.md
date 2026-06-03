@@ -160,6 +160,9 @@ final class ParentViewController: QuickLayoutHostingController {
         host.eventHandler = { event in
             print("representable event:", event.name)
         }
+        host.detailedEventHandler = { event in
+            print("representable detailed event:", event.kind.name)
+        }
         return host
     }
 
@@ -190,6 +193,11 @@ view. A loaded `LazyView` keeps its host instance; replace the stored `LazyView`
 when the next display should create a fresh child controller. Use
 `captureParent(_:)` or `init(_:parent:)` only when the host does not live under a
 standard controller-owned UIKit view hierarchy.
+
+Use `detailedEventHandler` when integration logs need containment context such
+as the resolved parent, old child, new child, or missing-parent reason. If the
+child changes `preferredContentSize`, call `invalidateChildLayout()` on the
+representable so QuickLayout can remeasure the hosted controller.
 
 ### Layout updating
 
@@ -237,8 +245,19 @@ let scrollView = QuickLayoutScrollView.vertical {
 For horizontal content, pass `axis: .horizontal` to `ScrollView` or use
 `QuickLayoutScrollView.horizontal`.
 
+For RTL-aware horizontal scrolling, the scroll view resolves leading and
+trailing from the current UIKit direction by default. Set
+`quickLayoutDirectionOverride` when an app-level language switch needs an
+explicit direction before UIKit has propagated traits:
+
+```swift
+scrollView.quickLayoutDirectionOverride = .rightToLeft
+scrollView.scrollToBeginning(animated: false) // semantic leading: physical right
+```
+
 For direct scroll content management, update or append builder content and ask
-the scroll view to preserve the visible position:
+the scroll view to preserve the visible position. Use anchors when prepend or
+replace operations should keep a visible view stable on screen:
 
 ```swift
 scrollView.updateContent(
@@ -253,11 +272,20 @@ scrollView.appendContent {
     newRowView
 }
 
+scrollView.prependContent(
+    options: [.layoutImmediately, .preserveVisiblePosition],
+    preserving: .view(firstVisibleRow)
+) {
+    olderRowView
+}
+
 scrollView.scrollTo(.bottom, animated: true)
 ```
 
 `scrollToBeginning(animated:)` and `scrollToEnd(animated:)` remain available as
-convenience methods.
+convenience methods. Set `scrollEventHandler` to observe content-size changes,
+pending scroll application, and anchor preservation results in debug tooling or
+production diagnostics.
 
 ### Layout direction
 
@@ -304,9 +332,11 @@ system controls.
 ### Keyboard helpers
 
 Use `QuickLayoutKeyboardObserver` when you only need parsed keyboard context,
-including the frame, animation duration, and animation options. Use
-`QuickLayoutKeyboardAvoider` when a form lives inside a scroll view and the
-active input should remain visible.
+including the event, begin/end frames, animation duration, and animation
+options. Resolve the context against the view that owns the layout before using
+the keyboard height; this measures the actual intersection, so floating
+keyboards, split keyboards, iPad windows, and hardware-keyboard transitions do
+not over-inset the UI.
 
 ```swift
 final class FormViewController: QuickLayoutHostingController {
@@ -320,9 +350,36 @@ final class FormViewController: QuickLayoutHostingController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        keyboardAvoider.extraBottomPadding = 12
+        keyboardAvoider.safeAreaStrategy = .subtractExisting
         _ = keyboardAvoider
     }
+
+    func keyboardDidChange(_ context: QuickLayoutKeyboardContext) {
+        let resolved = context.resolved(in: scrollView)
+        print(context.event, resolved.height, resolved.intersection)
+    }
 }
+```
+
+`QuickLayoutKeyboardAvoider` uses `context.resolved(in: scrollView)` internally.
+Its `safeAreaStrategy` defaults to `.ignore`, which avoids double-counting when
+your QuickLayout body already pads for safe area. Use `.add` only when the
+scroll content does not include safe-area padding, or `.subtractExisting` when
+the base inset already contains the bottom safe area.
+
+`QuickLayoutKeyboardContext.height` remains a compatibility fallback for raw
+notifications. For precise layout use `context.resolved(in: view).height`; if
+you need the system-reported frame, read `context.endFrame.height`.
+
+Custom input controls can participate in active-view tracking by posting:
+
+```swift
+NotificationCenter.default.post(
+    name: .quickLayoutKeyboardActiveInputDidBeginEditing,
+    object: customInputView,
+    userInfo: ["activeView": customInputView]
+)
 ```
 
 If the app changes the scroll view's base insets after creating the avoider,
@@ -347,6 +404,13 @@ Read environment values after the view has been laid out. In a hosting
 controller body, they are commonly used as part of the layout pass. Prefer
 direction-aware helpers over direct `safeAreaInsets.left` or
 `layoutMargins.right` access when the UI can run in RTL.
+
+`UIView.quickLayoutEnvironment` captures the current layout direction, dynamic
+type category, size classes, interface style, display scale, safe area, and
+layout margins. `QuickLayoutView` compares that environment during trait, safe
+area, margin, and window changes, then calls
+`quickLayoutEnvironmentDidChange(_:reason:)`. Override that hook for reusable
+views that need to refresh cached UIKit content before QuickLayout runs again.
 
 ### Collection view sizing helpers
 

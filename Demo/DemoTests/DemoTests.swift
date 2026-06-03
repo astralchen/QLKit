@@ -93,6 +93,59 @@ struct DemoTests {
         #expect(scrollView.contentOffset.x == leadingLTR)
     }
 
+    @Test func horizontalScrollViewUsesExplicitQuickLayoutDirectionOverride() {
+        let first = UIView()
+        let second = UIView()
+        let scrollView = QuickLayoutScrollView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        scrollView.semanticContentAttribute = .forceLeftToRight
+        scrollView.quickLayoutDirectionOverride = .rightToLeft
+
+        scrollView.updateContent(axis: .horizontal) {
+            first.frame(width: 120)
+            second.frame(width: 120)
+        }
+        scrollView.layoutIfNeeded()
+        scrollView.scrollTo(.leading, animated: false)
+
+        let maximumOffset = max(
+            -scrollView.adjustedContentInset.left,
+            scrollView.contentSize.width - scrollView.bounds.width + scrollView.adjustedContentInset.right
+        )
+
+        #expect(first.frame.minX > second.frame.minX)
+        #expect(scrollView.contentOffset.x == maximumOffset)
+    }
+
+    @Test func scrollViewPrependPreservesVisibleViewAnchorAndEmitsEvents() {
+        let prepended = UIView()
+        let first = UIView()
+        let second = UIView()
+        let scrollView = QuickLayoutScrollView(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
+        var events: [QuickLayoutScrollView.Event] = []
+        scrollView.scrollEventHandler = { events.append($0) }
+
+        scrollView.updateContent(axis: .vertical) {
+            first.frame(height: 100)
+            second.frame(height: 100)
+        }
+        scrollView.layoutIfNeeded()
+        scrollView.contentOffset = CGPoint(x: 0, y: 50)
+        let before = second.convert(second.bounds, to: scrollView).minY - scrollView.contentOffset.y
+
+        scrollView.prependContent(
+            options: [.layoutImmediately],
+            preserving: .view(second)
+        ) {
+            prepended.frame(height: 80)
+        }
+
+        let after = second.convert(second.bounds, to: scrollView).minY - scrollView.contentOffset.y
+
+        #expect(abs(after - before) < 0.5)
+        #expect(events.contains { if case .contentSizeChanged = $0 { true } else { false } })
+        #expect(events.contains { if case .didPreserveVisiblePosition = $0 { true } else { false } })
+    }
+
     @Test func horizontalScrollViewAppliesRTLDirectionToContentLayout() {
         let first = UIView()
         let second = UIView()
@@ -186,11 +239,13 @@ struct DemoTests {
     }
 
     @Test func keyboardContextParsesUIKitNotification() throws {
+        let beginFrame = CGRect(x: 0, y: 844, width: 390, height: 0)
         let frame = CGRect(x: 0, y: 320, width: 390, height: 240)
         let notification = Notification(
             name: UIResponder.keyboardWillShowNotification,
             object: nil,
             userInfo: [
+                UIResponder.keyboardFrameBeginUserInfoKey: beginFrame,
                 UIResponder.keyboardFrameEndUserInfoKey: frame,
                 UIResponder.keyboardAnimationDurationUserInfoKey: 0.25,
                 UIResponder.keyboardAnimationCurveUserInfoKey: UInt(UIView.AnimationCurve.easeInOut.rawValue),
@@ -199,10 +254,102 @@ struct DemoTests {
 
         let context = try #require(QuickLayoutKeyboardContext(notification: notification))
 
+        #expect(context.event == .willShow)
+        #expect(context.beginFrame == beginFrame)
         #expect(context.endFrame == frame)
         #expect(context.height == 240)
         #expect(context.animationDuration == 0.25)
         #expect(context.isVisible)
+    }
+
+    @Test func keyboardContextMapsChangeAndHideEvents() throws {
+        let didChange = Notification(
+            name: UIResponder.keyboardDidChangeFrameNotification,
+            object: nil,
+            userInfo: [
+                UIResponder.keyboardFrameEndUserInfoKey: CGRect(x: 0, y: 600, width: 390, height: 244),
+            ]
+        )
+        let willHide = Notification(
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil,
+            userInfo: [
+                UIResponder.keyboardFrameEndUserInfoKey: CGRect(x: 0, y: 844, width: 390, height: 0),
+            ]
+        )
+
+        let didChangeContext = try #require(QuickLayoutKeyboardContext(notification: didChange))
+        let willHideContext = try #require(QuickLayoutKeyboardContext(notification: willHide))
+
+        #expect(didChangeContext.event == .didChangeFrame)
+        #expect(didChangeContext.isVisible)
+        #expect(willHideContext.event == .willHide)
+        #expect(!willHideContext.isVisible)
+        #expect(willHideContext.height == 0)
+    }
+
+    @Test func keyboardContextResolvesVisibleIntersectionInTargetView() {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let fullScreenView = UIView(frame: window.bounds)
+        let insetView = UIView(frame: CGRect(x: 0, y: 250, width: 390, height: 120))
+        window.addSubview(fullScreenView)
+        window.addSubview(insetView)
+
+        let normalContext = QuickLayoutKeyboardContext(
+            endFrame: CGRect(x: 0, y: 600, width: 390, height: 244),
+            animationDuration: 0,
+            animationOptions: [],
+            isVisible: true,
+            event: .willShow
+        )
+        let floatingContext = QuickLayoutKeyboardContext(
+            endFrame: CGRect(x: 40, y: 300, width: 220, height: 180),
+            animationDuration: 0,
+            animationOptions: [],
+            isVisible: true,
+            event: .willChangeFrame
+        )
+
+        let normalResolved = normalContext.resolved(in: fullScreenView)
+        let floatingResolved = floatingContext.resolved(in: insetView)
+
+        #expect(normalResolved.height == 244)
+        #expect(normalResolved.intersection == CGRect(x: 0, y: 600, width: 390, height: 244))
+        #expect(!normalResolved.isFloatingOrSplitKeyboard)
+        #expect(floatingResolved.keyboardFrameInView == CGRect(x: 40, y: 50, width: 220, height: 180))
+        #expect(floatingResolved.intersection == CGRect(x: 40, y: 50, width: 220, height: 70))
+        #expect(floatingResolved.height == 70)
+        #expect(floatingResolved.height != floatingContext.endFrame.height)
+        #expect(floatingResolved.isFloatingOrSplitKeyboard)
+    }
+
+    @Test func keyboardContextResolvesHardwareAndNonOverlappingKeyboardsToZero() {
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 390, height: 300))
+        window.addSubview(scrollView)
+
+        let nonOverlappingContext = QuickLayoutKeyboardContext(
+            endFrame: CGRect(x: 0, y: 500, width: 390, height: 200),
+            animationDuration: 0,
+            animationOptions: [],
+            isVisible: true,
+            event: .willChangeFrame
+        )
+        let hardwareContext = QuickLayoutKeyboardContext(
+            endFrame: CGRect(x: 0, y: 844, width: 390, height: 0),
+            animationDuration: 0,
+            animationOptions: [],
+            isVisible: true,
+            event: .willShow
+        )
+
+        let nonOverlappingResolved = nonOverlappingContext.resolved(in: scrollView)
+        let hardwareResolved = hardwareContext.resolved(in: scrollView)
+
+        #expect(nonOverlappingResolved.height == 0)
+        #expect(nonOverlappingResolved.intersection.isNull)
+        #expect(hardwareResolved.height == 0)
+        #expect(hardwareResolved.isHardwareKeyboardLikely)
     }
 
     @Test func keyboardAvoiderPreservesBaseScrollInsets() {
@@ -220,7 +367,8 @@ struct DemoTests {
             endFrame: CGRect(x: 0, y: 300, width: 320, height: 120),
             animationDuration: 0,
             animationOptions: [],
-            isVisible: true
+            isVisible: true,
+            event: .willShow
         )
 
         avoider.apply(visibleContext)
@@ -234,6 +382,84 @@ struct DemoTests {
         #expect(scrollView.contentInset.bottom == 10)
         #expect(scrollView.verticalScrollIndicatorInsets.bottom == 7)
         #expect(scrollView.horizontalScrollIndicatorInsets.bottom == 11)
+    }
+
+    @Test func keyboardAvoiderAppliesSafeAreaStrategiesAndExtraPadding() {
+        let scrollView = TestSafeAreaScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        scrollView.testSafeAreaInsets = UIEdgeInsets(top: 0, left: 0, bottom: 34, right: 0)
+        scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 10, right: 0)
+        let avoider = QuickLayoutKeyboardAvoider(
+            scrollView: scrollView,
+            observer: QuickLayoutKeyboardObserver(notificationCenter: NotificationCenter()),
+            notificationCenter: NotificationCenter()
+        )
+        avoider.extraBottomPadding = 8
+
+        let visibleContext = QuickLayoutKeyboardContext(
+            endFrame: CGRect(x: 0, y: 360, width: 320, height: 120),
+            animationDuration: 0,
+            animationOptions: [],
+            isVisible: true,
+            event: .willShow
+        )
+        let nonOverlappingContext = QuickLayoutKeyboardContext(
+            endFrame: CGRect(x: 0, y: 640, width: 320, height: 120),
+            animationDuration: 0,
+            animationOptions: [],
+            isVisible: true,
+            event: .willChangeFrame
+        )
+
+        avoider.safeAreaStrategy = .ignore
+        avoider.apply(visibleContext)
+        #expect(scrollView.contentInset.bottom == 138)
+
+        avoider.safeAreaStrategy = .add
+        avoider.apply(visibleContext)
+        #expect(scrollView.contentInset.bottom == 172)
+
+        avoider.safeAreaStrategy = .subtractExisting
+        avoider.apply(visibleContext)
+        #expect(scrollView.contentInset.bottom == 104)
+
+        avoider.apply(nonOverlappingContext)
+        #expect(scrollView.contentInset.bottom == 10)
+    }
+
+    @Test func keyboardAvoiderTracksCustomActiveInputNotification() {
+        let notificationCenter = NotificationCenter()
+        let scrollView = UIScrollView(frame: CGRect(x: 0, y: 0, width: 320, height: 120))
+        scrollView.contentSize = CGSize(width: 320, height: 640)
+        let activeInput = UIView(frame: CGRect(x: 0, y: 520, width: 320, height: 44))
+        scrollView.addSubview(activeInput)
+
+        let avoider = QuickLayoutKeyboardAvoider(
+            scrollView: scrollView,
+            observer: QuickLayoutKeyboardObserver(notificationCenter: NotificationCenter()),
+            notificationCenter: notificationCenter
+        )
+        let visibleContext = QuickLayoutKeyboardContext(
+            endFrame: CGRect(x: 0, y: 80, width: 320, height: 40),
+            animationDuration: 0,
+            animationOptions: [],
+            isVisible: true,
+            event: .willShow
+        )
+
+        notificationCenter.post(
+            name: .quickLayoutKeyboardActiveInputDidBeginEditing,
+            object: nil,
+            userInfo: ["activeView": activeInput]
+        )
+        avoider.apply(visibleContext)
+
+        #expect(scrollView.contentOffset.y > 0)
+
+        scrollView.setContentOffset(.zero, animated: false)
+        notificationCenter.post(name: .quickLayoutKeyboardActiveInputDidEndEditing, object: activeInput)
+        avoider.apply(visibleContext)
+
+        #expect(scrollView.contentOffset.y == 0)
     }
 
     @Test func listCellMeasuresQuickLayoutContent() {
@@ -271,6 +497,36 @@ struct DemoTests {
         #expect(margins.leading == 2)
         #expect(margins.bottom == 3)
         #expect(margins.trailing == 4)
+    }
+
+    @Test func quickLayoutEnvironmentReflectsCurrentUIViewState() {
+        let view = UIView(frame: CGRect(x: 0, y: 0, width: 320, height: 480))
+        view.semanticContentAttribute = .forceRightToLeft
+        view.directionalLayoutMargins = NSDirectionalEdgeInsets(top: 8, leading: 12, bottom: 16, trailing: 20)
+
+        let environment = view.quickLayoutEnvironment
+
+        #expect(environment.layoutDirection == .rightToLeft)
+        #expect(environment.preferredContentSizeCategory == view.traitCollection.preferredContentSizeCategory)
+        #expect(environment.horizontalSizeClass == view.traitCollection.horizontalSizeClass)
+        #expect(environment.verticalSizeClass == view.traitCollection.verticalSizeClass)
+        #expect(environment.userInterfaceStyle == view.traitCollection.userInterfaceStyle)
+        #expect(environment.displayScale == view.traitCollection.displayScale)
+        #expect(environment.layoutMargins.leading == 12)
+        #expect(view.quickLayoutDirection == .rightToLeft)
+    }
+
+    @Test func quickLayoutViewNotifiesEnvironmentChangesFromMargins() {
+        let hostingView = EnvironmentRecordingQuickLayoutView()
+        hostingView.frame = CGRect(x: 0, y: 0, width: 320, height: 480)
+        hostingView.layoutMargins = UIEdgeInsets(top: 1, left: 2, bottom: 3, right: 4)
+        hostingView.layoutIfNeeded()
+
+        hostingView.layoutMargins = UIEdgeInsets(top: 5, left: 6, bottom: 7, right: 8)
+        hostingView.layoutMarginsDidChange()
+
+        #expect(hostingView.environmentChanges.contains { $0.reason.contains(.layoutMargins) })
+        #expect(hostingView.environmentChanges.last?.environment.layoutMargins.leading == 6)
     }
 
     @Test func diagnosticsRecordsLayoutPasses() {
@@ -408,6 +664,47 @@ struct DemoTests {
         #expect(secondChild.parent === parent)
     }
 
+    @Test func representableDetailedEventsIncludeContainmentContext() {
+        let parent = UIViewController()
+        parent.loadViewIfNeeded()
+        let firstChild = RepresentableTestChildViewController(name: "A")
+        let secondChild = RepresentableTestChildViewController(name: "B")
+        var detailedEvents: [QuickLayoutViewControllerRepresentable.DetailedEvent] = []
+
+        let representable = QuickLayoutViewControllerRepresentable(firstChild)
+        representable.detailedEventHandler = { detailedEvents.append($0) }
+        parent.view.addSubview(representable)
+        representable.frame = CGRect(x: 0, y: 0, width: 200, height: 120)
+        representable.layoutIfNeeded()
+        representable.setViewController(secondChild)
+
+        #expect(detailedEvents.contains {
+            $0.kind == .didAttach && $0.parent === parent && $0.viewController === firstChild
+        })
+        #expect(detailedEvents.contains {
+            $0.kind == .willDetach && $0.parent === parent && $0.viewController === firstChild
+        })
+        #expect(detailedEvents.contains {
+            $0.kind == .didAttach && $0.parent === parent && $0.viewController === secondChild
+        })
+        #expect(detailedEvents.contains {
+            $0.kind == .didReplaceViewController && $0.oldViewController === firstChild && $0.newViewController === secondChild
+        })
+    }
+
+    @Test func representableInvalidatesChildPreferredContentSize() {
+        let child = RepresentableTestChildViewController(name: "A")
+        let representable = QuickLayoutViewControllerRepresentable(child)
+
+        let firstSize = representable.sizeThatFits(CGSize(width: 400, height: 400))
+        child.preferredContentSize = CGSize(width: 240, height: 180)
+        representable.invalidateChildLayout()
+        let secondSize = representable.sizeThatFits(CGSize(width: 400, height: 400))
+
+        #expect(firstSize.height == 96)
+        #expect(secondSize.height == 180)
+    }
+
     @Test func resettingLazyRepresentableCreatesANewHostOnNextLayout() {
         let parent = UIViewController()
         parent.loadViewIfNeeded()
@@ -488,6 +785,24 @@ struct DemoTests {
         #expect(DemoLocalization.currentLayoutDirection == .rightToLeft)
 
         DemoLocalization.setLocale(identifier: "en-US")
+    }
+
+    @Test func rootRebuildIsSkippedWhenPresentedControllerExists() {
+        let leftToRightChange = LocalizationChange(previousLocale: .englishUS, currentLocale: .simplifiedChinese)
+        let rightToLeftChange = LocalizationChange(previousLocale: .englishUS, currentLocale: .arabic)
+
+        #expect(!DemoLocalization.shouldRebuildRootWindows(
+            for: leftToRightChange,
+            hasPresentedViewController: false
+        ))
+        #expect(DemoLocalization.shouldRebuildRootWindows(
+            for: rightToLeftChange,
+            hasPresentedViewController: false
+        ))
+        #expect(!DemoLocalization.shouldRebuildRootWindows(
+            for: rightToLeftChange,
+            hasPresentedViewController: true
+        ))
     }
 
     @Test func localizationStringCatalogContainsSupportedLocales() throws {
@@ -651,6 +966,28 @@ private extension UIView {
             matches.append(contentsOf: subview.allSubviews(of: type))
             return matches
         }
+    }
+}
+
+private final class EnvironmentRecordingQuickLayoutView: QuickLayoutView {
+
+    var environmentChanges: [(environment: QuickLayoutEnvironment, reason: QuickLayoutEnvironmentChangeReason)] = []
+
+    override func quickLayoutEnvironmentDidChange(
+        _ environment: QuickLayoutEnvironment,
+        reason: QuickLayoutEnvironmentChangeReason
+    ) {
+        super.quickLayoutEnvironmentDidChange(environment, reason: reason)
+        environmentChanges.append((environment, reason))
+    }
+}
+
+private final class TestSafeAreaScrollView: UIScrollView {
+
+    var testSafeAreaInsets: UIEdgeInsets = .zero
+
+    override var safeAreaInsets: UIEdgeInsets {
+        testSafeAreaInsets
     }
 }
 

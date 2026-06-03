@@ -1,11 +1,73 @@
 import Combine
 import UIKit
 
+/// The UIKit keyboard notification event represented by a context.
+public enum QuickLayoutKeyboardEvent: Equatable, Sendable {
+    case willShow
+    case willHide
+    case willChangeFrame
+    case didChangeFrame
+    case unknown
+}
+
+/// Controls how keyboard avoidance combines with the scroll view's safe area.
+public enum QuickLayoutKeyboardSafeAreaStrategy: Equatable, Sendable {
+    /// Use only the resolved keyboard intersection height.
+    case ignore
+
+    /// Add the scroll view's bottom safe area to the resolved keyboard height.
+    case add
+
+    /// Subtract the scroll view's existing bottom safe area from the resolved keyboard height.
+    case subtractExisting
+}
+
+/// Keyboard geometry resolved for a concrete view.
+public struct QuickLayoutResolvedKeyboardContext: Equatable, Sendable {
+
+    /// The keyboard frame converted into the target view's coordinate space.
+    public let keyboardFrameInView: CGRect
+
+    /// The visible bounds used for intersection.
+    public let visibleBounds: CGRect
+
+    /// The intersection between the target visible bounds and keyboard frame.
+    public let intersection: CGRect
+
+    /// The effective visible keyboard height for the target view.
+    public let height: CGFloat
+
+    /// A Boolean value indicating whether the keyboard appears floating or split.
+    public let isFloatingOrSplitKeyboard: Bool
+
+    /// A Boolean value indicating whether this looks like an external hardware keyboard transition.
+    public let isHardwareKeyboardLikely: Bool
+}
+
+public extension Notification.Name {
+
+    /// Posted by custom input controls when editing begins.
+    static let quickLayoutKeyboardActiveInputDidBeginEditing = Notification.Name(
+        "QuickLayoutKeyboardActiveInputDidBeginEditing"
+    )
+
+    /// Posted by custom input controls when editing ends.
+    static let quickLayoutKeyboardActiveInputDidEndEditing = Notification.Name(
+        "QuickLayoutKeyboardActiveInputDidEndEditing"
+    )
+}
+
 /// A parsed UIKit keyboard notification.
 public struct QuickLayoutKeyboardContext: Equatable, Sendable {
 
+    /// The keyboard frame at the beginning of the transition.
+    public let beginFrame: CGRect
+
     /// The keyboard frame at the end of the transition.
     public let endFrame: CGRect
+
+    /// The UIKit keyboard event that produced this context.
+    public let event: QuickLayoutKeyboardEvent
 
     /// The keyboard animation duration.
     public let animationDuration: TimeInterval
@@ -17,18 +79,26 @@ public struct QuickLayoutKeyboardContext: Equatable, Sendable {
     public let isVisible: Bool
 
     /// The effective keyboard height.
+    ///
+    /// Before the context has been resolved against a view, this falls back to
+    /// UIKit's raw `endFrame.height` for compatibility.
     public var height: CGFloat {
-        isVisible ? endFrame.height : 0
+        guard isVisible else { return 0 }
+        return endFrame.height
     }
 
     /// Creates a context from explicit values.
     public init(
+        beginFrame: CGRect = .zero,
         endFrame: CGRect,
         animationDuration: TimeInterval,
         animationOptions: UIView.AnimationOptions,
-        isVisible: Bool
+        isVisible: Bool,
+        event: QuickLayoutKeyboardEvent = .unknown
     ) {
+        self.beginFrame = beginFrame
         self.endFrame = endFrame
+        self.event = event
         self.animationDuration = animationDuration
         self.animationOptions = animationOptions
         self.isVisible = isVisible
@@ -38,21 +108,61 @@ public struct QuickLayoutKeyboardContext: Equatable, Sendable {
     ///
     /// - Parameter notification: A keyboard notification from `UIResponder`.
     public init?(notification: Notification) {
-        guard let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
+        guard let endFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else {
             return nil
         }
 
+        let beginFrame = notification.userInfo?[UIResponder.keyboardFrameBeginUserInfoKey] as? CGRect ?? .zero
         let duration = notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? TimeInterval ?? 0.25
         let curveValue = notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt
         let options = curveValue.map { UIView.AnimationOptions(rawValue: $0 << 16) } ?? .curveEaseInOut
-        let visible = notification.name != UIResponder.keyboardWillHideNotification
+        let event = QuickLayoutKeyboardEvent(notificationName: notification.name)
+        let visible = event != .willHide
 
         self.init(
-            endFrame: frame,
+            beginFrame: beginFrame,
+            endFrame: endFrame,
             animationDuration: duration,
             animationOptions: options,
-            isVisible: visible
+            isVisible: visible,
+            event: event
         )
+    }
+
+    /// Resolves keyboard geometry for a target view.
+    ///
+    /// UIKit keyboard frames are reported in screen coordinates. This method
+    /// converts the frame into the target view and measures the visible
+    /// intersection, which is required for floating keyboards, split keyboards,
+    /// iPad windows, and views that are offset inside a window.
+    @MainActor
+    public func resolved(in view: UIView) -> QuickLayoutResolvedKeyboardContext {
+        let keyboardFrameInView = convertedEndFrame(in: view)
+        let visibleBounds = view.bounds
+        let intersects = isVisible && endFrame.height > 0 && !keyboardFrameInView.isEmpty
+        let intersection = intersects ? visibleBounds.intersection(keyboardFrameInView) : .null
+        let hasIntersection = !intersection.isNull && !intersection.isEmpty
+        let height = hasIntersection ? intersection.height : 0
+        let horizontalGap = keyboardFrameInView.minX > visibleBounds.minX + 0.5
+            || keyboardFrameInView.maxX < visibleBounds.maxX - 0.5
+        let floatsAboveBottom = keyboardFrameInView.maxY < visibleBounds.maxY - 0.5
+        let floatingOrSplit = isVisible && hasIntersection && (horizontalGap || floatsAboveBottom)
+        let hardwareKeyboard = isVisible && endFrame.height <= 0
+
+        return QuickLayoutResolvedKeyboardContext(
+            keyboardFrameInView: keyboardFrameInView,
+            visibleBounds: visibleBounds,
+            intersection: intersection,
+            height: height,
+            isFloatingOrSplitKeyboard: floatingOrSplit,
+            isHardwareKeyboardLikely: hardwareKeyboard
+        )
+    }
+
+    /// Resolves keyboard geometry for a scroll view.
+    @MainActor
+    public func resolved(in scrollView: UIScrollView) -> QuickLayoutResolvedKeyboardContext {
+        resolved(in: scrollView as UIView)
     }
 
     /// An empty hidden-keyboard context.
@@ -60,8 +170,36 @@ public struct QuickLayoutKeyboardContext: Equatable, Sendable {
         endFrame: .zero,
         animationDuration: 0.25,
         animationOptions: .curveEaseInOut,
-        isVisible: false
+        isVisible: false,
+        event: .willHide
     )
+
+    @MainActor
+    private func convertedEndFrame(in view: UIView) -> CGRect {
+        guard let window = view.window else {
+            return view.convert(endFrame, from: nil)
+        }
+
+        let frameInWindow = window.convert(endFrame, from: nil)
+        return view.convert(frameInWindow, from: window)
+    }
+}
+
+private extension QuickLayoutKeyboardEvent {
+    init(notificationName: Notification.Name) {
+        switch notificationName {
+        case UIResponder.keyboardWillShowNotification:
+            self = .willShow
+        case UIResponder.keyboardWillHideNotification:
+            self = .willHide
+        case UIResponder.keyboardWillChangeFrameNotification:
+            self = .willChangeFrame
+        case UIResponder.keyboardDidChangeFrameNotification:
+            self = .didChangeFrame
+        default:
+            self = .unknown
+        }
+    }
 }
 
 /// Observes UIKit keyboard notifications and publishes parsed keyboard context.
@@ -88,6 +226,7 @@ public final class QuickLayoutKeyboardObserver: ObservableObject {
             UIResponder.keyboardWillShowNotification,
             UIResponder.keyboardWillHideNotification,
             UIResponder.keyboardWillChangeFrameNotification,
+            UIResponder.keyboardDidChangeFrameNotification,
         ]
 
         for name in notifications {
@@ -109,9 +248,16 @@ public final class QuickLayoutKeyboardAvoider {
     private let observer: QuickLayoutKeyboardObserver
     private var cancellables: Set<AnyCancellable> = []
     private weak var activeView: UIView?
+    private var keyboardInsetDelta: CGFloat = 0
     private var baseContentInset: UIEdgeInsets
     private var baseVerticalScrollIndicatorInsets: UIEdgeInsets
     private var baseHorizontalScrollIndicatorInsets: UIEdgeInsets
+
+    /// Additional bottom spacing applied only while a keyboard intersects the scroll view.
+    public var extraBottomPadding: CGFloat = 0
+
+    /// Controls how resolved keyboard height combines with the scroll view safe area.
+    public var safeAreaStrategy: QuickLayoutKeyboardSafeAreaStrategy = .ignore
 
     /// Creates a keyboard avoider for a scroll view.
     ///
@@ -120,7 +266,8 @@ public final class QuickLayoutKeyboardAvoider {
     ///   - observer: The keyboard observer to use.
     public init(
         scrollView: UIScrollView,
-        observer: QuickLayoutKeyboardObserver = QuickLayoutKeyboardObserver()
+        observer: QuickLayoutKeyboardObserver = QuickLayoutKeyboardObserver(),
+        notificationCenter: NotificationCenter = .default
     ) {
         self.scrollView = scrollView
         self.observer = observer
@@ -134,11 +281,28 @@ public final class QuickLayoutKeyboardAvoider {
             }
             .store(in: &cancellables)
 
-        NotificationCenter.default.publisher(for: UITextField.textDidBeginEditingNotification)
-            .merge(with: NotificationCenter.default.publisher(for: UITextView.textDidBeginEditingNotification))
+        Publishers.MergeMany([
+            notificationCenter.publisher(for: UITextField.textDidBeginEditingNotification),
+            notificationCenter.publisher(for: UITextView.textDidBeginEditingNotification),
+            notificationCenter.publisher(for: .quickLayoutKeyboardActiveInputDidBeginEditing),
+        ])
             .sink { [weak self] notification in
-                self?.activeView = notification.object as? UIView
+                self?.activeView = QuickLayoutKeyboardAvoider.activeView(from: notification)
                 self?.scrollActiveViewIntoVisibleArea(animated: true)
+            }
+            .store(in: &cancellables)
+
+        Publishers.MergeMany([
+            notificationCenter.publisher(for: UITextField.textDidEndEditingNotification),
+            notificationCenter.publisher(for: UITextView.textDidEndEditingNotification),
+            notificationCenter.publisher(for: .quickLayoutKeyboardActiveInputDidEndEditing),
+        ])
+            .sink { [weak self] notification in
+                guard let self else { return }
+                let endedView = QuickLayoutKeyboardAvoider.activeView(from: notification)
+                if endedView == nil || endedView === activeView {
+                    activeView = nil
+                }
             }
             .store(in: &cancellables)
     }
@@ -158,14 +322,17 @@ public final class QuickLayoutKeyboardAvoider {
     public func apply(_ context: QuickLayoutKeyboardContext) {
         guard let scrollView else { return }
 
-        let keyboardHeight = context.isVisible ? context.height : 0
+        let resolved = context.resolved(in: scrollView)
+        let insetDelta = insetDelta(for: resolved, in: scrollView)
+        keyboardInsetDelta = insetDelta
+
         var contentInset = baseContentInset
         var verticalIndicatorInsets = baseVerticalScrollIndicatorInsets
         var horizontalIndicatorInsets = baseHorizontalScrollIndicatorInsets
 
-        contentInset.bottom = baseContentInset.bottom + keyboardHeight
-        verticalIndicatorInsets.bottom = baseVerticalScrollIndicatorInsets.bottom + keyboardHeight
-        horizontalIndicatorInsets.bottom = baseHorizontalScrollIndicatorInsets.bottom + keyboardHeight
+        contentInset.bottom = baseContentInset.bottom + insetDelta
+        verticalIndicatorInsets.bottom = baseVerticalScrollIndicatorInsets.bottom + insetDelta
+        horizontalIndicatorInsets.bottom = baseHorizontalScrollIndicatorInsets.bottom + insetDelta
 
         UIView.animate(
             withDuration: context.animationDuration,
@@ -178,7 +345,7 @@ public final class QuickLayoutKeyboardAvoider {
                 scrollView.superview?.layoutIfNeeded()
             },
             completion: { [weak self] _ in
-                self?.scrollActiveViewIntoVisibleArea(animated: context.isVisible)
+                self?.scrollActiveViewIntoVisibleArea(animated: resolved.height > 0)
             }
         )
     }
@@ -203,6 +370,50 @@ public final class QuickLayoutKeyboardAvoider {
         }
 
         let targetRect = activeView.convert(activeView.bounds, to: scrollView).insetBy(dx: 0, dy: -12)
-        scrollView.scrollRectToVisible(targetRect, animated: animated)
+        var visibleBounds = scrollView.bounds
+        visibleBounds.size.height = max(0, visibleBounds.height - keyboardInsetDelta)
+
+        var targetOffset = scrollView.contentOffset
+        if targetRect.maxY > visibleBounds.maxY {
+            targetOffset.y += targetRect.maxY - visibleBounds.maxY
+        }
+        if targetRect.minY < visibleBounds.minY {
+            targetOffset.y -= visibleBounds.minY - targetRect.minY
+        }
+
+        let minY = -scrollView.adjustedContentInset.top
+        let maxY = max(
+            minY,
+            scrollView.contentSize.height - scrollView.bounds.height + scrollView.adjustedContentInset.bottom
+        )
+        targetOffset.y = min(max(targetOffset.y, minY), maxY)
+        scrollView.setContentOffset(targetOffset, animated: animated)
+    }
+
+    private func insetDelta(
+        for resolved: QuickLayoutResolvedKeyboardContext,
+        in scrollView: UIScrollView
+    ) -> CGFloat {
+        guard resolved.height > 0 else { return 0 }
+
+        let safeAreaBottom = scrollView.safeAreaInsets.bottom
+        let keyboardHeight: CGFloat
+        switch safeAreaStrategy {
+        case .ignore:
+            keyboardHeight = resolved.height
+        case .add:
+            keyboardHeight = resolved.height + safeAreaBottom
+        case .subtractExisting:
+            keyboardHeight = max(0, resolved.height - safeAreaBottom)
+        }
+
+        return keyboardHeight + extraBottomPadding
+    }
+
+    private static func activeView(from notification: Notification) -> UIView? {
+        if let view = notification.userInfo?["activeView"] as? UIView {
+            return view
+        }
+        return notification.object as? UIView
     }
 }

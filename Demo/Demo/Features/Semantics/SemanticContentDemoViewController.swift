@@ -232,23 +232,33 @@ class ExampleRow1: UIView {
 
 @QuickLayout
 class ExampleRow2: UIView {
-    let leadingView = UIView()
-    let centerLabel = UILabel()
-    let trailingView = UIView()
+    let leadingBackgroundView = UIView()
+    let leadingTitleLabel = UILabel()
+    let directionIconView = UIImageView(image: UIImage(systemName: "arrow.left.and.right"))
+    let trailingTitleLabel = UILabel()
+    let trailingBackgroundView = UIView()
 
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .secondarySystemBackground
         layer.cornerRadius = 8
 
-        leadingView.backgroundColor = .systemBlue
-        leadingView.layer.cornerRadius = 4
+        leadingBackgroundView.backgroundColor = .systemBlue
+        leadingBackgroundView.layer.cornerRadius = 6
 
-        trailingView.backgroundColor = .systemRed
-        trailingView.layer.cornerRadius = 4
+        trailingBackgroundView.backgroundColor = .systemRed
+        trailingBackgroundView.layer.cornerRadius = 6
 
-        centerLabel.font = .systemFont(ofSize: 14)
-        centerLabel.textAlignment = .center
+        [leadingTitleLabel, trailingTitleLabel].forEach { label in
+            label.font = .systemFont(ofSize: 12, weight: .semibold)
+            label.textColor = .label
+            label.textAlignment = .center
+            label.adjustsFontSizeToFitWidth = true
+            label.minimumScaleFactor = 0.8
+        }
+
+        directionIconView.tintColor = .secondaryLabel
+        directionIconView.contentMode = .scaleAspectFit
         reloadLocalizedContent()
     }
 
@@ -257,18 +267,31 @@ class ExampleRow2: UIView {
     }
 
     var body: Layout {
-        HStack(spacing: 8) {
-            leadingView
-                .frame(width: 40, height: 40)
-            centerLabel
-            trailingView
-                .frame(width: 40, height: 40)
+        HStack(alignment: .center, spacing: 12) {
+            leadingTitleLabel
+                .padding(8)
+                .background() {
+                    leadingBackgroundView
+                }
+
+            Spacer()
+            directionIconView
+                .resizable()
+                .frame(width: 24, height: 24)
+            Spacer()
+
+            trailingTitleLabel
+                .padding(8)
+                .background() {
+                    trailingBackgroundView
+                }
         }
         .padding(EdgeInsets(top: 12, leading: 12, bottom: 12, trailing: 12))
     }
 
     func reloadLocalizedContent() {
-        centerLabel.text = DemoLocalization.text("semantic.leadingTrailing")
+        leadingTitleLabel.text = DemoLocalization.text("semantic.leading")
+        trailingTitleLabel.text = DemoLocalization.text("semantic.trailing")
         setNeedsLayout()
     }
 }

@@ -93,3 +93,8 @@ private struct SwiftUILocalizationBridgeView: View {
         }
     }
 }
+
+
+#Preview {
+    UINavigationController(rootViewController: SwiftUILocalizationBridgeDemoViewController())
+}

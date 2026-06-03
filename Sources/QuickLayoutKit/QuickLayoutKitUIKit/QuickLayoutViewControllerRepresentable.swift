@@ -38,6 +38,8 @@ public final class QuickLayoutViewControllerRepresentable: UIView, QuickLayoutUp
         case viewControllerAlreadyParented
         /// The child view was laid out inside the representable.
         case didLayoutSubviews
+        /// The hosted child layout was invalidated.
+        case didInvalidateChildLayout
 
         /// A stable string name for logging and tests.
         public var name: String {
@@ -68,8 +70,35 @@ public final class QuickLayoutViewControllerRepresentable: UIView, QuickLayoutUp
                 return "viewControllerAlreadyParented"
             case .didLayoutSubviews:
                 return "didLayoutSubviews"
+            case .didInvalidateChildLayout:
+                return "didInvalidateChildLayout"
             }
         }
+    }
+
+    /// A stable detailed-event kind.
+    public typealias EventKind = Event
+
+    /// A containment or layout event with contextual controller references.
+    public struct DetailedEvent {
+
+        /// The event kind.
+        public let kind: EventKind
+
+        /// The parent view controller involved in the event.
+        public let parent: UIViewController?
+
+        /// The primary child view controller involved in the event.
+        public let viewController: UIViewController?
+
+        /// The previous child when replacing hosted controllers.
+        public let oldViewController: UIViewController?
+
+        /// The new child when replacing hosted controllers.
+        public let newViewController: UIViewController?
+
+        /// Optional diagnostic context.
+        public let reason: String?
     }
 
     /// The currently hosted child view controller.
@@ -78,9 +107,17 @@ public final class QuickLayoutViewControllerRepresentable: UIView, QuickLayoutUp
     /// Receives containment and layout events.
     public var eventHandler: ((Event) -> Void)?
 
+    /// Receives containment and layout events with parent and child context.
+    public var detailedEventHandler: ((DetailedEvent) -> Void)?
+
+    /// Enables lightweight preferred-content-size change detection during
+    /// measurement.
+    public var observesPreferredContentSizeChanges = true
+
     private weak var parentViewController: UIViewController?
     private var isAttached = false
     private var usesExplicitParent = false
+    private var lastPreferredContentSize: CGSize = .zero
 
     /// Creates a representable view for a child view controller.
     ///
@@ -127,14 +164,26 @@ public final class QuickLayoutViewControllerRepresentable: UIView, QuickLayoutUp
             return
         }
 
-        emit(.willReplaceViewController)
+        let oldViewController = self.viewController
+        emit(
+            .willReplaceViewController,
+            viewController: oldViewController,
+            oldViewController: oldViewController,
+            newViewController: viewController
+        )
         detachIfNeeded()
         removeCurrentChildViewIfNeeded()
         self.viewController = viewController
+        lastPreferredContentSize = viewController?.preferredContentSize ?? .zero
         attachIfNeeded()
         invalidateIntrinsicContentSize()
         setNeedsLayout()
-        emit(.didReplaceViewController)
+        emit(
+            .didReplaceViewController,
+            viewController: viewController,
+            oldViewController: oldViewController,
+            newViewController: viewController
+        )
     }
 
     /// Detaches and releases the hosted child view controller.
@@ -143,6 +192,7 @@ public final class QuickLayoutViewControllerRepresentable: UIView, QuickLayoutUp
         detachIfNeeded()
         removeCurrentChildViewIfNeeded()
         viewController = nil
+        lastPreferredContentSize = .zero
         invalidateIntrinsicContentSize()
         setNeedsLayout()
         emit(.didDismantleViewController)
@@ -194,6 +244,7 @@ public final class QuickLayoutViewControllerRepresentable: UIView, QuickLayoutUp
         }
 
         let preferredSize = viewController.preferredContentSize
+        updatePreferredContentSizeIfNeeded(preferredSize)
         if preferredSize != .zero {
             return clamped(preferredSize, to: size)
         }
@@ -229,6 +280,16 @@ public final class QuickLayoutViewControllerRepresentable: UIView, QuickLayoutUp
         layoutIfNeeded()
         viewController?.view?.layoutIfNeeded()
     }
+
+    /// Invalidates the hosted child controller layout and representable size.
+    public func invalidateChildLayout() {
+        viewController?.view?.setNeedsLayout()
+        viewController?.view?.invalidateIntrinsicContentSize()
+        invalidateIntrinsicContentSize()
+        setNeedsLayout()
+        superview?.setNeedsLayout()
+        emit(.didInvalidateChildLayout)
+    }
 }
 
 private extension QuickLayoutViewControllerRepresentable {
@@ -245,15 +306,20 @@ private extension QuickLayoutViewControllerRepresentable {
             return
         }
         guard let parentViewController else {
-            emit(.missingParent)
+            emit(.missingParent, viewController: viewController, reason: "No parent view controller in responder chain.")
             return
         }
         if let existingParent = viewController.parent, existingParent !== parentViewController {
-            emit(.viewControllerAlreadyParented)
+            emit(
+                .viewControllerAlreadyParented,
+                parent: existingParent,
+                viewController: viewController,
+                reason: "The child already belongs to another parent."
+            )
             return
         }
 
-        emit(.willAttach)
+        emit(.willAttach, parent: parentViewController, viewController: viewController)
 
         if viewController.parent == nil {
             parentViewController.addChild(viewController)
@@ -275,7 +341,8 @@ private extension QuickLayoutViewControllerRepresentable {
         isAttached = true
         setNeedsLayout()
 
-        emit(.didAttach)
+        lastPreferredContentSize = viewController.preferredContentSize
+        emit(.didAttach, parent: parentViewController, viewController: viewController)
     }
 
     func resolveParentIfNeeded() {
@@ -288,7 +355,7 @@ private extension QuickLayoutViewControllerRepresentable {
 
         detachIfNeeded()
         parentViewController = resolvedParent
-        emit(.didCaptureParent)
+        emit(.didCaptureParent, parent: resolvedParent, viewController: viewController)
     }
 
     func nearestOwningViewController() -> UIViewController? {
@@ -307,22 +374,40 @@ private extension QuickLayoutViewControllerRepresentable {
             return
         }
 
-        emit(.willDetach)
+        let parentViewController = viewController.parent ?? parentViewController
+        emit(.willDetach, parent: parentViewController, viewController: viewController)
 
         viewController.willMove(toParent: nil)
         viewController.view?.removeFromSuperview()
         viewController.removeFromParent()
         isAttached = false
 
-        emit(.didDetach)
+        emit(.didDetach, parent: parentViewController, viewController: viewController)
     }
 
     func removeCurrentChildViewIfNeeded() {
         viewController?.view?.removeFromSuperview()
     }
 
-    func emit(_ event: Event) {
+    func emit(
+        _ event: Event,
+        parent: UIViewController? = nil,
+        viewController: UIViewController? = nil,
+        oldViewController: UIViewController? = nil,
+        newViewController: UIViewController? = nil,
+        reason: String? = nil
+    ) {
         eventHandler?(event)
+        detailedEventHandler?(
+            DetailedEvent(
+                kind: event,
+                parent: parent ?? parentViewController,
+                viewController: viewController ?? self.viewController,
+                oldViewController: oldViewController,
+                newViewController: newViewController,
+                reason: reason
+            )
+        )
     }
 
     func clamped(_ measuredSize: CGSize, to maximumSize: CGSize) -> CGSize {
@@ -330,5 +415,16 @@ private extension QuickLayoutViewControllerRepresentable {
             width: maximumSize.width.isFinite ? min(measuredSize.width, maximumSize.width) : measuredSize.width,
             height: maximumSize.height.isFinite ? min(measuredSize.height, maximumSize.height) : measuredSize.height
         )
+    }
+
+    func updatePreferredContentSizeIfNeeded(_ preferredContentSize: CGSize) {
+        guard observesPreferredContentSizeChanges,
+              preferredContentSize != lastPreferredContentSize else {
+            return
+        }
+
+        lastPreferredContentSize = preferredContentSize
+        invalidateIntrinsicContentSize()
+        setNeedsLayout()
     }
 }

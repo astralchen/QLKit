@@ -166,6 +166,7 @@ class ScrollViewWithKeyboardViewController: DemoQuickLayoutHostingController {
     let phoneTextField = UITextField()
     let addressTextField = UITextField()
     let notesTextView = UITextView()
+    let customInputButton = UIButton(type: .system)
     let submitButton = UIButton(type: .system)
 
     // Form Field Views
@@ -204,6 +205,10 @@ class ScrollViewWithKeyboardViewController: DemoQuickLayoutHostingController {
 
                 // Notes Field
                 notesFieldView
+
+                // Custom input control
+                customInputButton
+                    .frame(height: 48)
 
                 // Submit Button
                 submitButton
@@ -255,6 +260,14 @@ class ScrollViewWithKeyboardViewController: DemoQuickLayoutHostingController {
         notesTextView.textContainerInset = UIEdgeInsets(top: 12, left: 8, bottom: 12, right: 8)
         notesTextView.delegate = self
 
+        var customInputConfig = UIButton.Configuration.tinted()
+        customInputConfig.cornerStyle = .large
+        customInputConfig.image = UIImage(systemName: "keyboard.badge.eye")
+        customInputConfig.imagePlacement = .leading
+        customInputConfig.imagePadding = 8
+        customInputButton.configuration = customInputConfig
+        customInputButton.addTarget(self, action: #selector(customInputTapped), for: .touchUpInside)
+
         // Configure Submit Button
         var config = UIButton.Configuration.filled()
         config.cornerStyle = .large
@@ -267,6 +280,8 @@ class ScrollViewWithKeyboardViewController: DemoQuickLayoutHostingController {
 
         submitButton.configuration = config
         submitButton.addTarget(self, action: #selector(submitTapped), for: .touchUpInside)
+        keyboardAvoider.extraBottomPadding = 12
+        keyboardAvoider.safeAreaStrategy = .ignore
         reloadLocalizedContent()
     }
 
@@ -278,13 +293,14 @@ class ScrollViewWithKeyboardViewController: DemoQuickLayoutHostingController {
         phoneFieldView.updatePlaceholder(DemoLocalization.text("form.phone"))
         addressFieldView.updatePlaceholder(DemoLocalization.text("form.address"))
         notesFieldView.reloadLocalizedContent()
+        customInputButton.configuration?.title = DemoLocalization.text("form.customInput")
         submitButton.configuration?.title = DemoLocalization.text("form.submit")
     }
 
     override func reloadLayoutDirection(_ direction: UIUserInterfaceLayoutDirection) {
         super.reloadLayoutDirection(direction)
         let attribute = direction.appLayoutDirection.semanticContentAttribute
-        let inputViews: [UIView] = [nameTextField, emailTextField, phoneTextField, addressTextField, notesTextView]
+        let inputViews: [UIView] = [nameTextField, emailTextField, phoneTextField, addressTextField, notesTextView, customInputButton]
         inputViews.forEach {
             $0.semanticContentAttribute = attribute
         }
@@ -339,8 +355,22 @@ class ScrollViewWithKeyboardViewController: DemoQuickLayoutHostingController {
 
     @objc private func dismissKeyboard() {
         view.endEditing(true)
+        if currentActiveField === customInputButton {
+            NotificationCenter.default.post(name: .quickLayoutKeyboardActiveInputDidEndEditing, object: customInputButton)
+        }
         currentActiveField = nil
         keyboardAvoider.setActiveView(nil)
+    }
+
+    @objc private func customInputTapped() {
+        view.endEditing(true)
+        currentActiveField = customInputButton
+        NotificationCenter.default.post(
+            name: .quickLayoutKeyboardActiveInputDidBeginEditing,
+            object: customInputButton,
+            userInfo: ["activeView": customInputButton]
+        )
+        scrollToActiveField(customInputButton)
     }
 
     @objc private func submitTapped() {

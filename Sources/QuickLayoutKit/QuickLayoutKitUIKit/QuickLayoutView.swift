@@ -6,9 +6,10 @@ import QuickLayout
 /// Use `QuickLayoutView` when a QuickLayout hierarchy needs to be embedded in
 /// an existing UIKit view controller, table view cell, collection view cell, or
 /// reusable view without introducing a dedicated view controller subclass.
-open class QuickLayoutView: UIView, HasBody, QuickLayoutUpdating {
+open class QuickLayoutView: UIView, HasBody, QuickLayoutUpdating, QuickLayoutEnvironmentUpdating {
 
     private var contentProvider: (() -> Layout)?
+    private var lastQuickLayoutEnvironment: QuickLayoutEnvironment?
 
     /// Creates a hosting view with no content.
     public override init(frame: CGRect) {
@@ -47,8 +48,29 @@ open class QuickLayoutView: UIView, HasBody, QuickLayoutUpdating {
         _QuickLayoutViewImplementation.willMove(self, toWindow: newWindow)
     }
 
+    open override func didMoveToWindow() {
+        super.didMoveToWindow()
+        updateQuickLayoutEnvironment(explicitReason: [])
+    }
+
+    open override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        updateQuickLayoutEnvironment(explicitReason: [])
+    }
+
+    open override func safeAreaInsetsDidChange() {
+        super.safeAreaInsetsDidChange()
+        updateQuickLayoutEnvironment(explicitReason: .safeArea)
+    }
+
+    open override func layoutMarginsDidChange() {
+        super.layoutMarginsDidChange()
+        updateQuickLayoutEnvironment(explicitReason: .layoutMargins)
+    }
+
     open override func layoutSubviews() {
         super.layoutSubviews()
+        updateQuickLayoutEnvironment(explicitReason: [])
         QuickLayoutDiagnostics.recordLayoutPass(for: String(describing: Self.self), measuredSize: bounds.size)
         _QuickLayoutViewImplementation.layoutSubviews(self)
     }
@@ -77,5 +99,38 @@ open class QuickLayoutView: UIView, HasBody, QuickLayoutUpdating {
     /// - Returns: The size that fits the hosted layout.
     open func sizeThatFits(in size: CGSize) -> CGSize {
         sizeThatFits(size)
+    }
+
+    /// Responds to UIKit environment changes that can affect layout.
+    ///
+    /// The default implementation invalidates the hosted QuickLayout content.
+    /// Subclasses can override this method to synchronize additional state.
+    open func quickLayoutEnvironmentDidChange(
+        _ environment: QuickLayoutEnvironment,
+        reason: QuickLayoutEnvironmentChangeReason
+    ) {
+        setNeedsQuickLayout()
+    }
+
+    @discardableResult
+    private func updateQuickLayoutEnvironment(
+        explicitReason: QuickLayoutEnvironmentChangeReason
+    ) -> Bool {
+        let environment = quickLayoutEnvironment
+        let reason: QuickLayoutEnvironmentChangeReason
+
+        if let lastQuickLayoutEnvironment {
+            reason = environment
+                .changeReason(from: lastQuickLayoutEnvironment)
+                .union(explicitReason)
+        } else {
+            reason = explicitReason
+        }
+
+        self.lastQuickLayoutEnvironment = environment
+        guard !reason.isEmpty else { return false }
+
+        quickLayoutEnvironmentDidChange(environment, reason: reason)
+        return true
     }
 }

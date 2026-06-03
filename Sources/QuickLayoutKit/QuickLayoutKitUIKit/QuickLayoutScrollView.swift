@@ -41,11 +41,37 @@ public struct QuickLayoutScrollContentUpdateOptions: OptionSet, Sendable {
     public static let layoutImmediately = QuickLayoutScrollContentUpdateOptions(rawValue: 1 << 1)
 }
 
+/// A semantic anchor used when preserving visible scroll position.
+public enum QuickLayoutScrollAnchor {
+
+    /// Preserve the visible leading edge using the measured content-size delta.
+    case visibleLeadingEdge
+
+    /// Preserve the visible center using the measured content-size delta.
+    case visibleCenter
+
+    /// Preserve the screen position of a specific view.
+    case view(UIView)
+}
+
 /// A scroll view that lays out QuickLayout elements as its content.
 ///
 /// `QuickLayoutScrollView` measures its `contentElements` with QuickLayout and
 /// updates its `contentSize` during layout.
 open class QuickLayoutScrollView: UIScrollView, HasBody {
+
+    /// Runtime events emitted by `QuickLayoutScrollView`.
+    public enum Event {
+
+        /// The measured content size changed during layout.
+        case contentSizeChanged(old: CGSize, new: CGSize)
+
+        /// A deferred scroll request was applied after content was measured.
+        case didApplyPendingScroll(edge: QuickLayoutScrollEdge, animated: Bool)
+
+        /// A content update preserved the requested visible position.
+        case didPreserveVisiblePosition(anchor: QuickLayoutScrollAnchor)
+    }
 
     // MARK: - Public Properties
 
@@ -72,6 +98,22 @@ open class QuickLayoutScrollView: UIScrollView, HasBody {
             setNeedsLayout()
         }
     }
+
+    /// Overrides the effective QuickLayout direction used for content layout
+    /// and leading/trailing scroll offsets.
+    ///
+    /// The default value, `nil`, derives the direction from UIKit's effective
+    /// user interface layout direction.
+    open var quickLayoutDirectionOverride: LayoutDirection? {
+        didSet {
+            if quickLayoutDirectionOverride != oldValue {
+                setNeedsLayout()
+            }
+        }
+    }
+
+    /// Receives scroll measurement and content-update events.
+    open var scrollEventHandler: ((Event) -> Void)?
 
     private var pendingScrollRequest: PendingScrollRequest?
 
@@ -144,20 +186,19 @@ open class QuickLayoutScrollView: UIScrollView, HasBody {
             size: proposedSize
         ) ?? .zero
 
-        let layoutDirection: LayoutDirection = effectiveUserInterfaceLayoutDirection == .rightToLeft
-            ? .rightToLeft
-            : .leftToRight
+        let oldContentSize = self.contentSize
 
         // Apply layout with proper alignment
         body.applyFrame(
             CGRect(origin: .zero, size: contentSize),
             alignment: contentAlignment,
-            layoutDirection: layoutDirection
+            layoutDirection: resolvedQuickLayoutDirection
         )
 
         // Update scrollView's contentSize
         if self.contentSize != contentSize {
             self.contentSize = contentSize
+            scrollEventHandler?(.contentSizeChanged(old: oldContentSize, new: contentSize))
         }
 
         applyPendingScrollRequestIfPossible()
@@ -176,6 +217,134 @@ open class QuickLayoutScrollView: UIScrollView, HasBody {
             // Horizontal scrolling: infinite width, fix height
             return CGSize(width: .infinity, height: frameSize.height)
         }
+    }
+
+    private var resolvedQuickLayoutDirection: LayoutDirection {
+        quickLayoutDirectionOverride ?? quickLayoutDirection
+    }
+
+    private func applyContentUpdate(
+        axis: QuickLayout.Axis?,
+        options: QuickLayoutScrollContentUpdateOptions,
+        preserving anchor: QuickLayoutScrollAnchor?,
+        @FastArrayBuilder<Element> content: () -> [Element]
+    ) {
+        let capturedAnchor = anchor.map { captureScrollAnchor($0) }
+        let shouldPreserveAnchor = capturedAnchor != nil || options.contains(.preserveVisiblePosition)
+
+        if let axis {
+            self.axis = axis
+        }
+        contentElements = content()
+
+        if options.contains(.layoutImmediately) || shouldPreserveAnchor {
+            setNeedsLayout()
+            layoutIfNeeded()
+        }
+
+        guard shouldPreserveAnchor else { return }
+
+        if let anchor, let capturedAnchor {
+            restoreScrollAnchor(capturedAnchor)
+            scrollEventHandler?(.didPreserveVisiblePosition(anchor: anchor))
+        }
+    }
+
+    private func captureScrollAnchor(_ anchor: QuickLayoutScrollAnchor) -> CapturedScrollAnchor {
+        let fallback = CapturedScrollAnchor.fallback(
+            axis: axis,
+            contentSize: contentSize,
+            contentOffset: contentOffset
+        )
+
+        guard case .view(let view) = anchor,
+              view.superview != nil || view === self else {
+            return fallback
+        }
+
+        let rect = view.convert(view.bounds, to: self)
+        let contentPosition: CGFloat
+        let visiblePosition: CGFloat
+
+        switch axis {
+        case .vertical:
+            contentPosition = rect.minY
+            visiblePosition = rect.minY - contentOffset.y
+        case .horizontal:
+            contentPosition = rect.minX
+            visiblePosition = rect.minX - contentOffset.x
+        }
+
+        return .view(
+            view,
+            axis: axis,
+            contentPosition: contentPosition,
+            visiblePosition: visiblePosition,
+            fallback: fallback
+        )
+    }
+
+    private func restoreScrollAnchor(_ capturedAnchor: CapturedScrollAnchor) {
+        switch capturedAnchor {
+        case .fallback(let axis, let oldContentSize, let oldContentOffset):
+            restoreFallbackPosition(axis: axis, oldContentSize: oldContentSize, oldContentOffset: oldContentOffset)
+
+        case .view(let view, let axis, _, let visiblePosition, let fallback):
+            guard view.superview != nil || view === self else {
+                restoreScrollAnchor(fallback)
+                return
+            }
+
+            let rect = view.convert(view.bounds, to: self)
+            var targetOffset = contentOffset
+
+            switch axis {
+            case .vertical:
+                targetOffset.y = rect.minY - visiblePosition
+            case .horizontal:
+                targetOffset.x = rect.minX - visiblePosition
+            }
+
+            contentOffset = clampedContentOffset(targetOffset)
+        }
+    }
+
+    private func restoreFallbackPosition(
+        axis: QuickLayout.Axis,
+        oldContentSize: CGSize,
+        oldContentOffset: CGPoint
+    ) {
+        var targetOffset = oldContentOffset
+
+        switch axis {
+        case .vertical:
+            let delta = contentSize.height - oldContentSize.height
+            targetOffset.y = oldContentOffset.y + delta
+        case .horizontal:
+            let delta = contentSize.width - oldContentSize.width
+            targetOffset.x = oldContentOffset.x + delta
+        }
+
+        contentOffset = clampedContentOffset(targetOffset)
+    }
+
+    private func clampedContentOffset(_ proposedOffset: CGPoint) -> CGPoint {
+        let adjustedInset = adjustedContentInset
+        let minimumX = -adjustedInset.left
+        let maximumX = max(
+            minimumX,
+            contentSize.width - bounds.width + adjustedInset.right
+        )
+        let minimumY = -adjustedInset.top
+        let maximumY = max(
+            minimumY,
+            contentSize.height - bounds.height + adjustedInset.bottom
+        )
+
+        return CGPoint(
+            x: min(max(proposedOffset.x, minimumX), maximumX),
+            y: min(max(proposedOffset.y, minimumY), maximumY)
+        )
     }
 
     // MARK: - Public Methods
@@ -210,29 +379,54 @@ open class QuickLayoutScrollView: UIScrollView, HasBody {
         options: QuickLayoutScrollContentUpdateOptions = [.layoutImmediately],
         @FastArrayBuilder<Element> content: () -> [Element]
     ) {
-        let previousContentSize = contentSize
-        let previousContentOffset = contentOffset
+        applyContentUpdate(axis: axis, options: options, preserving: nil, content: content)
+    }
 
-        if let axis {
-            self.axis = axis
+    /// Replaces the scroll content while preserving a semantic visible anchor.
+    ///
+    /// - Parameters:
+    ///   - axis: The scroll axis to apply. Pass `nil` to keep the current axis.
+    ///   - options: Options controlling layout and visible-position behavior.
+    ///   - anchor: The visible anchor to preserve.
+    ///   - content: A builder closure that returns the new elements.
+    open func updateContent(
+        axis: QuickLayout.Axis? = nil,
+        options: QuickLayoutScrollContentUpdateOptions = [],
+        preserving anchor: QuickLayoutScrollAnchor,
+        @FastArrayBuilder<Element> content: () -> [Element]
+    ) {
+        applyContentUpdate(axis: axis, options: options, preserving: anchor, content: content)
+    }
+
+    /// Prepends builder-produced content to the current elements.
+    ///
+    /// - Parameters:
+    ///   - options: Options controlling layout and visible-position behavior.
+    ///   - anchor: The visible anchor to preserve.
+    ///   - content: A builder closure that returns the prepended elements.
+    open func prependContent(
+        options: QuickLayoutScrollContentUpdateOptions = [.preserveVisiblePosition],
+        preserving anchor: QuickLayoutScrollAnchor = .visibleLeadingEdge,
+        @FastArrayBuilder<Element> content: () -> [Element]
+    ) {
+        let prependedElements = content()
+        updateContent(axis: axis, options: options, preserving: anchor) {
+            ForEach(prependedElements + contentElements)
         }
-        contentElements = content()
+    }
 
-        if options.contains(.layoutImmediately) || options.contains(.preserveVisiblePosition) {
-            setNeedsLayout()
-            layoutIfNeeded()
-        }
-
-        guard options.contains(.preserveVisiblePosition) else { return }
-
-        switch self.axis {
-        case .vertical:
-            let delta = contentSize.height - previousContentSize.height
-            contentOffset = CGPoint(x: previousContentOffset.x, y: previousContentOffset.y + delta)
-        case .horizontal:
-            let delta = contentSize.width - previousContentSize.width
-            contentOffset = CGPoint(x: previousContentOffset.x + delta, y: previousContentOffset.y)
-        }
+    /// Replaces the scroll content with content produced by a builder.
+    ///
+    /// - Parameters:
+    ///   - axis: The scroll axis to apply. Pass `nil` to keep the current axis.
+    ///   - options: Options controlling immediate layout.
+    ///   - content: A builder closure that returns the new elements.
+    open func replaceContent(
+        axis: QuickLayout.Axis? = nil,
+        options: QuickLayoutScrollContentUpdateOptions = [.layoutImmediately],
+        @FastArrayBuilder<Element> content: () -> [Element]
+    ) {
+        applyContentUpdate(axis: axis, options: options, preserving: nil, content: content)
     }
 
     /// Appends builder-produced content to the current elements.
@@ -351,6 +545,7 @@ extension QuickLayoutScrollView {
             targetOffset(for: edge),
             requestedAnimated: pendingScrollRequest.animated
         )
+        scrollEventHandler?(.didApplyPendingScroll(edge: edge, animated: pendingScrollRequest.animated))
     }
 
     private func edge(for request: PendingScrollRequest) -> QuickLayoutScrollEdge? {
@@ -382,7 +577,7 @@ extension QuickLayoutScrollView {
             minimumOffset,
             contentSize.width - bounds.width + adjustedInset.right
         )
-        let isRightToLeft = effectiveUserInterfaceLayoutDirection == .rightToLeft
+        let isRightToLeft = resolvedQuickLayoutDirection == .rightToLeft
 
         switch (edge, isRightToLeft) {
         case (.leading, false), (.trailing, true):
@@ -421,5 +616,24 @@ private enum PendingScrollRequest {
         case .edge(_, let animated), .beginning(let animated), .end(let animated):
             return animated
         }
+    }
+}
+
+private indirect enum CapturedScrollAnchor {
+    case fallback(axis: QuickLayout.Axis, oldContentSize: CGSize, oldContentOffset: CGPoint)
+    case view(
+        UIView,
+        axis: QuickLayout.Axis,
+        contentPosition: CGFloat,
+        visiblePosition: CGFloat,
+        fallback: CapturedScrollAnchor
+    )
+
+    static func fallback(
+        axis: QuickLayout.Axis,
+        contentSize: CGSize,
+        contentOffset: CGPoint
+    ) -> CapturedScrollAnchor {
+        .fallback(axis: axis, oldContentSize: contentSize, oldContentOffset: contentOffset)
     }
 }
